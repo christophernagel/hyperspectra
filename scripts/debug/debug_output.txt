@@ -1,0 +1,26 @@
+=== ISOFIT L2 ===
+Shape: (284, 1280, 1234), Bands: 284
+Total NaN bands: 36
+NaN ranges:
+  3-3: 412.0-412.0 nm (1 bands)
+  17-17: 515.9-515.9 nm (1 bands)
+  129-142: 1350.8-1447.6 nm (14 bands)
+  190-209: 1804.7-1945.8 nm (20 bands)
+
+Clay index bands:
+  2120nm (band 232, 2116.4nm): 0.0% NaN
+  2200nm (band 243, 2197.8nm): 0.0% NaN
+  2250nm (band 250, 2249.6nm): 0.0% NaN
+
+=== SIMPLE L2 ===
+Shape: (284, 1280, 1234), Bands: 284
+Total NaN bands: 40
+NaN ranges:
+  129-142: 1350.8-1447.6 nm (14 bands)
+  190-209: 1804.7-1945.8 nm (20 bands)
+  278-283: 2456.6-2493.5 nm (6 bands)
+
+Clay index bands:
+  2120nm (band 232): 0.0% NaN, range: 0.0000-1.0000
+  2200nm (band 243): 0.0% NaN, range: 0.0000-1.0000
+  2250nm (band 250): 0.0% NaN, range: 0.0000-1.0000

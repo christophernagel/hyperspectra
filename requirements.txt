@@ -1,0 +1,19 @@
+# Core dependencies
+numpy>=1.21
+scipy>=1.7
+netCDF4>=1.5
+h5py>=3.0
+matplotlib>=3.4
+pyyaml>=6.0
+psutil>=5.8
+
+# Viewer (optional)
+# napari>=0.4.17
+# pyqt5>=5.15
+
+# Atmospheric correction (optional)
+# Py6S>=1.9
+
+# Interactive dashboard (optional)
+# dash>=2.0
+# plotly>=5.0

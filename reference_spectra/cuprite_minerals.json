@@ -1,0 +1,114 @@
+{
+  "description": "Cuprite, Nevada mineral reference data for AVIRIS verification",
+  "source": "USGS Spectral Library v7 and published AVIRIS Cuprite studies",
+
+  "minerals": {
+    "alunite": {
+      "formula": "KAl3(SO4)2(OH)6",
+      "key_absorptions_nm": [1480, 1760, 2170, 2320, 2510],
+      "primary_feature": {
+        "center_nm": 2170,
+        "depth_expected": 0.08,
+        "width_nm": 50
+      },
+      "typical_locations": {
+        "description": "Northern part of Cuprite district, associated with acid-sulfate alteration",
+        "approximate_pixels": "Upper-left quadrant of typical AVIRIS scenes"
+      },
+      "reference_spectrum": {
+        "wavelengths_nm": [2100, 2120, 2150, 2170, 2200, 2220, 2250],
+        "reflectance": [0.72, 0.71, 0.68, 0.62, 0.65, 0.68, 0.70]
+      }
+    },
+
+    "kaolinite": {
+      "formula": "Al2Si2O5(OH)4",
+      "key_absorptions_nm": [1400, 1910, 2165, 2205],
+      "primary_feature": {
+        "type": "doublet",
+        "centers_nm": [2165, 2205],
+        "depth_expected": [0.04, 0.06],
+        "diagnostic": "Doublet distinguishes kaolinite from other clays"
+      },
+      "typical_locations": {
+        "description": "Central Cuprite area, argillic alteration zones",
+        "approximate_pixels": "Central region of typical AVIRIS scenes"
+      },
+      "reference_spectrum": {
+        "wavelengths_nm": [2100, 2120, 2150, 2165, 2190, 2205, 2230, 2260],
+        "reflectance": [0.65, 0.64, 0.62, 0.59, 0.60, 0.57, 0.61, 0.62]
+      }
+    },
+
+    "calcite": {
+      "formula": "CaCO3",
+      "key_absorptions_nm": [1870, 1990, 2155, 2335, 2530],
+      "primary_feature": {
+        "center_nm": 2335,
+        "depth_expected": 0.10,
+        "width_nm": 40
+      },
+      "typical_locations": {
+        "description": "Eastern Cuprite area, carbonate-bearing zones"
+      },
+      "reference_spectrum": {
+        "wavelengths_nm": [2200, 2250, 2300, 2335, 2370, 2400],
+        "reflectance": [0.75, 0.74, 0.70, 0.62, 0.68, 0.72]
+      }
+    },
+
+    "muscovite": {
+      "formula": "KAl2(AlSi3O10)(OH)2",
+      "key_absorptions_nm": [1410, 2200, 2350, 2440],
+      "primary_feature": {
+        "center_nm": 2200,
+        "depth_expected": 0.08,
+        "width_nm": 30
+      },
+      "reference_spectrum": {
+        "wavelengths_nm": [2100, 2150, 2200, 2250, 2300],
+        "reflectance": [0.70, 0.68, 0.60, 0.65, 0.67]
+      }
+    },
+
+    "buddingtonite": {
+      "formula": "(NH4)AlSi3O8",
+      "key_absorptions_nm": [2020, 2120],
+      "primary_feature": {
+        "center_nm": 2120,
+        "depth_expected": 0.05,
+        "diagnostic": "Rare ammonium-bearing feldspar, unique to Cuprite"
+      }
+    }
+  },
+
+  "validation_criteria": {
+    "alunite_2170_absorption": {
+      "description": "Clear absorption at 2170nm for alunite detection",
+      "minimum_depth": 0.05,
+      "expected_p95": 0.08
+    },
+    "kaolinite_doublet": {
+      "description": "Visible doublet at 2165/2205nm",
+      "minimum_depth_each": 0.03,
+      "ratio_2205_2165": [0.8, 1.5]
+    },
+    "general_swir": {
+      "description": "SWIR reflectance should be 0.2-0.5 for mineral surfaces",
+      "expected_range": [0.2, 0.5]
+    }
+  },
+
+  "scene_characteristics": {
+    "vegetation_fraction": "< 5% (arid desert)",
+    "water_fraction": "< 0.1% (no significant water bodies)",
+    "expected_ndvi": "< 0.1 for most pixels",
+    "dominant_surface": "Exposed mineral soils and altered rocks"
+  },
+
+  "references": [
+    "Swayze et al., 2014. Mapping Advanced Argillic Alteration at Cuprite, Nevada",
+    "Clark et al., 2007. USGS Spectral Library splib07a",
+    "Kruse et al., 2003. Comparison of AVIRIS and EO-1 Hyperion for mineral mapping"
+  ]
+}

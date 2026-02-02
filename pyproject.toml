@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyperspectra"
+version = "3.0.0"
+description = "AVIRIS-3 hyperspectral processing, visualization, and learning toolkit"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Christopher Nagel"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+keywords = ["aviris", "hyperspectral", "atmospheric correction", "remote sensing"]
+
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "netCDF4>=1.5",
+    "h5py>=3.0",
+    "matplotlib>=3.4",
+    "pyyaml>=6.0",
+    "psutil>=5.8",
+]
+
+[project.optional-dependencies]
+viewer = [
+    "napari>=0.4.17",
+    "pyqt5>=5.15",
+]
+py6s = [
+    "Py6S>=1.9",
+]
+isofit = [
+    "isofit>=3.0",
+]
+dashboard = [
+    "dash>=2.0",
+    "plotly>=5.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "black",
+    "flake8",
+]
+all = [
+    "hyperspectra[viewer,py6s,dashboard,dev]",
+]
+
+[project.scripts]
+aviris-process = "aviris_tools.cli:process_cli"
+aviris-view = "aviris_tools.cli:view_cli"
+
+[project.urls]
+Homepage = "https://github.com/christophernagel/hyperspectra"
+Repository = "https://github.com/christophernagel/hyperspectra"
+
+[tool.setuptools]
+packages = [
+    "aviris_tools",
+    "aviris_tools.viewer",
+    "aviris_tools.viewer.widgets",
+    "aviris_tools.viewer.panels",
+    "aviris_tools.indices",
+    "aviris_tools.utils",
+    "aviris_tools.atm_correction",
+    "aviris_tools.tests",
+    "aviris_tools.scripts",
+    "hsi_toolkit",
+    "hsi_toolkit.atmosphere",
+    "hsi_toolkit.sensor",
+    "hsi_toolkit.forward_model",
+    "hsi_toolkit.visualization",
+    "hsi_toolkit.examples",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "build", "dist"]

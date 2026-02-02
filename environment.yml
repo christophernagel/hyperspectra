@@ -1,0 +1,71 @@
+# AVIRIS-3 Processing Tools Environment
+#
+# Installation:
+#   conda env create -f environment.yml
+#   conda activate aviris_tools
+#
+# Or update existing:
+#   conda env update -f environment.yml
+
+name: aviris_tools
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Core Python
+  - python>=3.9,<3.12
+  - pip
+
+  # Scientific computing
+  - numpy>=1.21
+  - scipy>=1.7
+  - pandas>=1.3
+
+  # NetCDF and geospatial
+  - netcdf4>=1.5
+  - h5py>=3.0
+  - xarray>=0.19
+
+  # Visualization
+  - napari>=0.4.17
+  - pyqt>=5.15
+  - matplotlib>=3.4
+
+  # Atmospheric correction
+  - py6s>=1.9
+
+  # System utilities
+  - psutil>=5.8
+  - pyyaml>=6.0
+
+  # ISOFIT (optional - large download)
+  # Uncomment if using ISOFIT processor:
+  # - isofit>=3.0
+
+  # Testing
+  - pytest>=7.0
+  - pytest-cov>=3.0
+
+  # Development
+  - black
+  - flake8
+
+  # Pip packages (not on conda-forge)
+  - pip:
+    - spectral>=0.23
+
+# Platform-specific notes:
+#
+# Windows:
+#   - ISOFIT works best in WSL due to shell script generation
+#   - Py6S requires 6S executable (conda install -c conda-forge sixs)
+#
+# Linux/WSL:
+#   - Full ISOFIT support
+#   - GPU acceleration available with additional packages
+#
+# macOS:
+#   - Py6S works natively
+#   - ISOFIT may require additional setup
