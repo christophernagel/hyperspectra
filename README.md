@@ -1,6 +1,8 @@
 # Hyperspectra
+<img width="2894" height="2000" alt="Screenshot 2026-02-02 133817" src="https://github.com/user-attachments/assets/07d8c14f-775a-42ec-b09e-2793c3be1436" />
 
 A desktop application for processing, visualizing, and analyzing airborne hyperspectral imagery. Built on Napari with a custom Qt interface for interactive spectral exploration of AVIRIS-3 data.
+
 
 ---
 
@@ -55,6 +57,7 @@ aviris-process radiance.nc obs.nc output.nc --aerosol maritime --verbose
 ---
 
 ### Interactive Viewer
+<img width="2917" height="2009" alt="Screenshot 2026-02-02 134328" src="https://github.com/user-attachments/assets/a44d6e64-dced-497c-b934-8287f3bb8816" />
 
 Napari-based image viewer with controls for hyperspectral workflows.
 
@@ -71,6 +74,7 @@ Napari-based image viewer with controls for hyperspectral workflows.
 Custom composites from any three wavelengths in the 380–2500nm range.
 
 **Spectral Indices (23 pre-defined):**
+<img width="2912" height="1955" alt="Screenshot 2026-02-02 134602" src="https://github.com/user-attachments/assets/093baa47-8e01-47d1-9f7d-ad5218b02d48" />
 
 | Category | Indices |
 |----------|---------|
@@ -86,6 +90,7 @@ Custom index calculator supports any two wavelengths with ratio or normalized di
 ---
 
 ### ROI Spectral Analysis
+<img width="2916" height="2010" alt="Screenshot 2026-02-02 134910" src="https://github.com/user-attachments/assets/15e791ad-4458-4ccf-bea9-295b6e80a87b" />
 
 Draw rectangle, polygon, or ellipse regions on any layer. Extracts full 284-band spectrum with mean ± standard deviation. Multiple ROIs can be compared on the same plot.
 
