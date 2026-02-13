@@ -378,3 +378,338 @@ REFERENCE_SIGNATURES = {
         (1695, 0.8, 'CH3'),
     ],
 }
+
+# =============================================================================
+# INDOOR MATERIAL SPECTRAL FEATURES (for HyperspecI and close-range imaging)
+#
+# Wavelength positions verified against published NIR/SWIR spectroscopy literature:
+#   - Wilson et al. (2015) "Review of short-wave infrared spectroscopy and imaging
+#     methods for biological tissue characterization" J. Biomed. Opt. 20(3):030901
+#   - Weyer & Lo (2002) "Spectra-Structure Correlations in the Near-Infrared"
+#     in Handbook of Vibrational Spectroscopy
+#
+# IMPORTANT: Relative absorption depths (0-1 scale) are APPROXIMATE placeholders.
+# For quantitative material matching, replace with measured spectra from:
+#   - USGS Spectral Library v7 Chapter A (manmade materials): https://doi.org/10.5066/F7RR1WDJ
+#   - ECOSTRESS/ASTER Spectral Library: https://speclib.jpl.nasa.gov/
+#
+# HyperspecI spectral ranges:
+#   D1: 400-1000nm (61 channels) - VNIR only, limited SWIR features
+#   D2: 400-1700nm (131 channels) - Includes first overtone C-H/N-H/O-H bands
+# =============================================================================
+
+INDOOR_MATERIAL_SIGNATURES = {
+    # Textiles and Fabrics
+    'Cotton (White)': [
+        (970, 0.5, 'Cellulose O-H'),
+        (1200, 0.6, 'C-H 2nd overtone'),
+        (1490, 0.8, 'Cellulose O-H 1st OT'),
+    ],
+    'Cotton (Colored)': [
+        (970, 0.4, 'Cellulose O-H'),
+        (1200, 0.5, 'C-H 2nd overtone'),
+        (1490, 0.7, 'Cellulose O-H 1st OT'),
+    ],
+    'Polyester': [
+        (1130, 0.7, 'C-H 2nd OT'),
+        (1410, 0.5, 'O-H impurity'),
+        (1660, 0.9, 'C-H 1st OT aromatic'),
+    ],
+    'Nylon': [
+        (1030, 0.5, 'N-H 2nd OT'),
+        (1500, 1.0, 'N-H 1st OT'),
+        (1200, 0.6, 'C-H 2nd OT'),
+    ],
+    'Wool': [
+        (1020, 0.6, 'N-H 2nd OT (protein)'),
+        (1190, 0.5, 'C-H 2nd OT'),
+        (1510, 0.9, 'N-H 1st OT'),
+    ],
+    'Silk': [
+        (1020, 0.7, 'N-H 2nd OT (protein)'),
+        (1510, 1.0, 'N-H 1st OT'),
+    ],
+
+    # Plastics
+    'Polyethylene (PE)': [
+        (1210, 0.8, 'CH2 2nd OT'),
+        (1400, 0.5, 'CH2 combo'),
+        # NOTE: Primary 1730nm peak is outside D2 range (400-1700nm)
+    ],
+    'Polypropylene (PP)': [
+        (1190, 0.7, 'CH3 2nd OT'),
+        (1380, 0.6, 'CH3 combo'),
+        # NOTE: 1720nm near D2 edge - may be partially captured
+    ],
+    'PVC': [
+        (1180, 0.6, 'C-H 2nd OT'),
+        (1420, 0.5, 'CH2 combo'),
+        (1710, 0.9, 'C-H 1st OT'),
+    ],
+    'Polystyrene': [
+        (1140, 0.7, 'Aromatic C-H 2nd OT'),
+        (1670, 1.0, 'Aromatic C-H 1st OT'),
+    ],
+    'Acrylic (PMMA)': [
+        (1180, 0.6, 'C-H 2nd OT'),
+        (1430, 0.5, 'O-H impurity'),
+        (1690, 0.9, 'C-H 1st OT'),
+    ],
+    'ABS Plastic': [
+        (1150, 0.6, 'C-H 2nd OT'),
+        (1670, 0.9, 'Aromatic C-H 1st OT'),
+        # NOTE: 1730nm aliphatic peak is outside D2 range
+    ],
+
+    # Food and Organic Materials
+    'Fresh Fruit': [
+        (680, 0.4, 'Chlorophyll'),
+        (970, 0.8, 'Water O-H'),
+        (1450, 1.0, 'Water O-H 1st OT'),
+    ],
+    'Dried Fruit': [
+        (980, 0.5, 'Residual water'),
+        (1200, 0.7, 'Sugar C-H'),
+        (1450, 0.6, 'Residual water'),
+    ],
+    'Bread/Baked Goods': [
+        (980, 0.5, 'Moisture'),
+        (1200, 0.8, 'Starch C-H'),
+        (1450, 0.6, 'Moisture'),
+        (1510, 0.4, 'Protein N-H'),
+    ],
+    'Meat (Raw)': [
+        (760, 0.5, 'Myoglobin'),
+        (970, 0.9, 'Water'),
+        (1450, 1.0, 'Water O-H'),
+        (1510, 0.6, 'Protein N-H'),
+    ],
+    'Meat (Cooked)': [
+        (970, 0.6, 'Reduced water'),
+        (1210, 0.5, 'Fat C-H 2nd OT'),
+        (1450, 0.7, 'Water'),
+        (1500, 0.5, 'Protein N-H'),
+        # NOTE: 1730nm fat peak outside D2 range, using 1210nm proxy
+    ],
+    'Cheese': [
+        (970, 0.7, 'Moisture'),
+        (1210, 0.6, 'Fat C-H 2nd OT'),
+        (1450, 0.8, 'Moisture'),
+        (1500, 0.5, 'Protein N-H'),
+        # NOTE: 1730nm fat peak outside D2 range, using 1210nm proxy
+    ],
+    'Leafy Vegetables': [
+        (550, 0.3, 'Chlorophyll reflectance'),
+        (680, 0.9, 'Chlorophyll absorption'),
+        (970, 0.8, 'Leaf water'),
+        (1450, 1.0, 'Leaf water'),
+    ],
+
+    # Wood and Paper
+    'Wood (Light)': [
+        (980, 0.4, 'Moisture'),
+        (1200, 0.6, 'Cellulose C-H'),
+        (1450, 0.7, 'Moisture'),
+        (1490, 0.9, 'Cellulose O-H'),
+        (1680, 0.5, 'Lignin'),
+    ],
+    'Wood (Dark)': [
+        (980, 0.3, 'Moisture'),
+        (1200, 0.5, 'Cellulose C-H'),
+        (1490, 0.8, 'Cellulose O-H'),
+        (1680, 0.7, 'Lignin (higher)'),
+    ],
+    'Paper (White)': [
+        (970, 0.3, 'Low moisture'),
+        (1200, 0.7, 'Cellulose C-H'),
+        (1490, 1.0, 'Cellulose O-H'),
+    ],
+    'Cardboard': [
+        (980, 0.4, 'Moisture'),
+        (1200, 0.6, 'Cellulose C-H'),
+        (1490, 0.9, 'Cellulose O-H'),
+        (1680, 0.5, 'Lignin'),
+    ],
+
+    # Metals and Coatings
+    'Painted Metal (White)': [
+        (1180, 0.4, 'Paint C-H 2nd OT'),
+        (1430, 0.3, 'Paint O-H'),
+        # NOTE: 1730nm peak outside D2 range
+    ],
+    'Painted Metal (Colored)': [
+        (1180, 0.5, 'Paint C-H 2nd OT'),
+        (1670, 0.4, 'Aromatic if present'),
+    ],
+    'Anodized Aluminum': [
+        # Generally flat spectrum with dye absorption
+        (550, 0.5, 'Dye absorption varies'),
+    ],
+    'Stainless Steel': [
+        # Very flat, low reflectance spectrum
+    ],
+
+    # Ceramics and Glass
+    'Ceramic (Glazed)': [
+        (1400, 0.4, 'Si-OH'),
+        # NOTE: 1900nm H2O feature outside D2 range
+    ],
+    'Glass (Clear)': [
+        (1400, 0.3, 'Si-OH'),
+        # Mostly flat spectrum - weak features
+    ],
+    'Porcelain': [
+        (1400, 0.5, 'Si-OH'),
+    ],
+
+    # Skin and Hair
+    'Human Skin': [
+        (550, 0.4, 'Hemoglobin'),
+        (580, 0.5, 'Melanin'),
+        (970, 0.6, 'Water'),
+        (1200, 0.4, 'Lipid C-H'),
+        (1450, 0.8, 'Water O-H'),
+    ],
+    'Hair (Dark)': [
+        (1180, 0.5, 'Keratin C-H'),
+        (1510, 0.9, 'Keratin N-H'),
+    ],
+    'Hair (Light)': [
+        (1180, 0.4, 'Keratin C-H'),
+        (1510, 0.8, 'Keratin N-H'),
+    ],
+}
+
+# =============================================================================
+# INDOOR SPECTRAL INDICES
+#
+# These indices are designed for indoor/close-range hyperspectral data.
+# Each index specifies which HyperspecI database(s) it works with:
+#   - 'range': (min_wl, max_wl) in nm - the wavelengths the index requires
+#   - D1 (400-1000nm) indices work on both databases
+#   - D2-only indices require the 400-1700nm extended range
+#
+# Key absorption bands (from Wilson et al. 2015, PMC4370890):
+#   Water:    970nm (2nd OT), 1430nm (1st OT), 1940nm (combo)
+#   Lipid:    920nm (2nd OT), 1210nm (2nd OT), 1730nm (1st OT - 80x stronger)
+#   Protein:  1200nm (2nd OT), 1500nm (combo), 1690nm (1st OT CH3)
+#   Collagen: 1200nm, 1500nm, 1690nm, 1725nm
+#
+# NOTE: 1730nm is OUTSIDE D2 range (400-1700nm). Use 1210nm (2nd overtone) or
+#       1690nm (edge of range) as proxies for lipid detection.
+# =============================================================================
+
+INDOOR_INDEX_DEFINITIONS = {
+    # -------------------------------------------------------------------------
+    # D1-compatible indices (400-1000nm) - work on both D1 and D2
+    # -------------------------------------------------------------------------
+
+    # Chlorophyll (plants, leafy items) - standard red edge
+    'Chlorophyll': {
+        'type': 'nd', 'b1': 750, 'b2': 680, 'cmap': 'RdYlGn',
+        'range': (680, 750),
+    },
+
+    # Moisture - weak 2nd overtone O-H at 970nm (D1 edge band - may be noisy)
+    'Moisture (VNIR)': {
+        'type': 'ratio', 'b1': 970, 'b2': 900, 'cmap': 'Blues',
+        'range': (900, 970),
+    },
+
+    # -------------------------------------------------------------------------
+    # D2-only indices (require 400-1700nm coverage)
+    # -------------------------------------------------------------------------
+
+    # Moisture - stronger 1st overtone O-H at 1430nm
+    'Moisture (SWIR)': {
+        'type': 'continuum', 'feature': 1430, 'left': 1350, 'right': 1500, 'cmap': 'Blues',
+        'range': (1350, 1500),
+    },
+
+    # Protein content - N-H combination band at 1500nm (collagen peak)
+    'Protein': {
+        'type': 'continuum', 'feature': 1500, 'left': 1450, 'right': 1550, 'cmap': 'Purples',
+        'range': (1450, 1550),
+    },
+
+    # Lipid - using 1210nm 2nd overtone (within D2 range, 12x weaker than 1730nm)
+    # NOTE: Primary 1730nm peak is outside D2 range!
+    'Lipid (2nd OT)': {
+        'type': 'continuum', 'feature': 1210, 'left': 1150, 'right': 1260, 'cmap': 'YlOrBr',
+        'range': (1150, 1260),
+    },
+
+    # Lipid - using 1690nm edge (CH3 1st overtone, at D2 limit)
+    # This may be partially captured but accuracy is uncertain
+    'Lipid (Edge)': {
+        'type': 'ratio', 'b1': 1690, 'b2': 1600, 'cmap': 'YlOrBr',
+        'range': (1600, 1690),
+    },
+
+    # Cellulose - O-H combination bands
+    'Cellulose': {
+        'type': 'continuum', 'feature': 1490, 'left': 1420, 'right': 1550, 'cmap': 'BuGn',
+        'range': (1420, 1550),
+    },
+
+    # Synthetic polymer detection - C-H vs N-H ratio
+    # Higher values = more aliphatic C-H (synthetic), lower = more N-H (protein/natural)
+    'Polymer': {
+        'type': 'ratio', 'b1': 1210, 'b2': 1500, 'cmap': 'plasma',
+        'range': (1210, 1500),
+    },
+
+    # Aromatic compounds - aromatic C-H 1st overtone at 1670nm
+    'Aromatic': {
+        'type': 'continuum', 'feature': 1670, 'left': 1620, 'right': 1700, 'cmap': 'inferno',
+        'range': (1620, 1700),
+    },
+}
+
+INDOOR_INDEX_METADATA = {
+    'Chlorophyll': {
+        'low': 'No chlorophyll', 'high': 'Chlorophyll present',
+        'desc': 'Red edge NDVI-like index (750/680nm). Works on D1 and D2.',
+        'database': 'D1, D2',
+    },
+    'Moisture (VNIR)': {
+        'low': 'Dry', 'high': 'Wet/Moist',
+        'desc': 'Weak O-H 2nd overtone at 970nm. Edge of D1 range - may be noisy.',
+        'database': 'D1, D2',
+    },
+    'Moisture (SWIR)': {
+        'low': 'Dry', 'high': 'Wet/Moist',
+        'desc': 'Strong O-H 1st overtone at 1430nm. 60x stronger than 970nm peak.',
+        'database': 'D2 only',
+    },
+    'Protein': {
+        'low': 'Low protein', 'high': 'High protein',
+        'desc': 'N-H combination band at 1500nm. High in meat, cheese, wool, silk, collagen.',
+        'database': 'D2 only',
+    },
+    'Lipid (2nd OT)': {
+        'low': 'Low fat', 'high': 'High fat',
+        'desc': 'C-H 2nd overtone at 1210nm. 12x weaker than 1730nm but within D2 range.',
+        'database': 'D2 only',
+    },
+    'Lipid (Edge)': {
+        'low': 'Low fat', 'high': 'High fat',
+        'desc': 'CH3 1st overtone at 1690nm. At D2 spectral limit - accuracy uncertain.',
+        'database': 'D2 only (edge)',
+    },
+    'Cellulose': {
+        'low': 'Low cellulose', 'high': 'High cellulose',
+        'desc': 'O-H combination at 1490nm. Paper, cotton, wood, plant cell walls.',
+        'database': 'D2 only',
+    },
+    'Polymer': {
+        'low': 'Natural (protein-rich)', 'high': 'Synthetic (C-H rich)',
+        'desc': 'Ratio of C-H (1210nm) to N-H (1500nm). Distinguishes plastic from organic.',
+        'database': 'D2 only',
+    },
+    'Aromatic': {
+        'low': 'Aliphatic', 'high': 'Aromatic-rich',
+        'desc': 'Aromatic C-H 1st overtone at 1670nm. Polystyrene, paint, dyes.',
+        'database': 'D2 only',
+    },
+}

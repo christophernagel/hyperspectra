@@ -1,5 +1,11 @@
 """
 Memory-efficient hyperspectral data loader with caching and interpolation.
+
+Supports:
+- NetCDF (.nc) - AVIRIS-3 L1B/L2 radiance and reflectance
+- HDF5 (.h5) - HyperspecI indoor hyperspectral dataset
+
+Use load_hyperspectral() for automatic format detection.
 """
 
 import numpy as np
@@ -10,6 +16,34 @@ import logging
 from .constants import ATMOSPHERIC_BANDS, DEFAULT_CACHE_SIZE
 
 logger = logging.getLogger(__name__)
+
+
+def load_hyperspectral(filepath):
+    """
+    Load hyperspectral data from any supported format.
+
+    Auto-detects file type and returns appropriate loader.
+
+    Parameters
+    ----------
+    filepath : str or Path
+        Path to data file (.nc, .h5, .hdf5)
+
+    Returns
+    -------
+    loader : LazyHyperspectralData or LazyH5Data
+        Data loader with unified interface
+    """
+    filepath = Path(filepath)
+    suffix = filepath.suffix.lower()
+
+    if suffix == '.nc':
+        return LazyHyperspectralData(filepath)
+    elif suffix in ('.h5', '.hdf5', '.hdf'):
+        from .h5_loader import LazyH5Data
+        return LazyH5Data(filepath)
+    else:
+        raise ValueError(f"Unsupported file format: {suffix}")
 
 
 class LazyHyperspectralData:
@@ -52,6 +86,7 @@ class LazyHyperspectralData:
         self.n_bands, self.n_rows, self.n_cols = self.shape
         self._band_cache = {}
         self._cache_max_size = DEFAULT_CACHE_SIZE
+        self._preloaded_cube = None  # Full cube in memory for fast access
 
         logger.info(f"Loaded: {self.n_bands} bands, {self.n_rows}x{self.n_cols} pixels, type={self.data_type}")
 
@@ -85,8 +120,36 @@ class LazyHyperspectralData:
             'current_size': len(self._band_cache),
             'max_size': self._cache_max_size,
             'cached_bands': list(self._band_cache.keys()),
-            'memory_mb': sum(b.nbytes for b in self._band_cache.values()) / 1e6
+            'memory_mb': sum(b.nbytes for b in self._band_cache.values()) / 1e6,
+            'preloaded': self._preloaded_cube is not None,
         }
+
+    # -------------------------------------------------------------------------
+    # Preload for Interactive Use
+    # -------------------------------------------------------------------------
+
+    def preload(self):
+        """
+        Load entire datacube into memory for fast interactive access.
+
+        Call this once after loading for interactive use (viewers, pixel clicking).
+        Trades memory for speed: ~1.4GB for a 284x1280x1234 float32 cube.
+        """
+        if self._preloaded_cube is not None:
+            logger.info("Cube already preloaded")
+            return
+
+        logger.info(f"Preloading full cube ({self.n_bands}x{self.n_rows}x{self.n_cols})...")
+        self._preloaded_cube = self.data_var[:, :, :].astype(np.float32)
+        mem_mb = self._preloaded_cube.nbytes / 1e6
+        logger.info(f"Preloaded {mem_mb:.1f} MB into memory")
+
+        # Clear band cache since we have full cube now
+        self._band_cache.clear()
+
+    def is_preloaded(self):
+        """Check if cube is preloaded into memory."""
+        return self._preloaded_cube is not None
 
     # -------------------------------------------------------------------------
     # Band Access
@@ -94,6 +157,10 @@ class LazyHyperspectralData:
 
     def get_band(self, band_idx):
         """Get a single band by index (with caching)."""
+        # Fast path: preloaded cube
+        if self._preloaded_cube is not None:
+            return self._preloaded_cube[band_idx]
+
         if band_idx in self._band_cache:
             return self._band_cache[band_idx]
 
@@ -107,6 +174,10 @@ class LazyHyperspectralData:
 
     def get_cube_region(self, row_slice, col_slice):
         """Get a spatial subset of the full cube."""
+        # Fast path: preloaded cube
+        if self._preloaded_cube is not None:
+            return self._preloaded_cube[:, row_slice, col_slice]
+
         return self.data_var[:, row_slice, col_slice].astype(np.float32)
 
     def find_band(self, target_wavelength):
@@ -363,10 +434,32 @@ class LazyHyperspectralData:
     # -------------------------------------------------------------------------
 
     def get_full_cube(self):
-        """Load entire data cube (warning: may be large)."""
-        return self.data_var[:].astype(np.float32)
+        """
+        Load entire datacube into memory for fast repeated access.
+
+        Call this once before doing many pixel lookups (e.g., material matching).
+        Subsequent get_cube_region() calls will use the in-memory array.
+
+        Returns
+        -------
+        np.ndarray
+            Full datacube as float32, shape (bands, rows, cols)
+        """
+        if self._preloaded_cube is None:
+            logger.info(f"Preloading full cube into memory...")
+            self._preloaded_cube = self.data_var[:].astype(np.float32)
+            size_mb = self._preloaded_cube.nbytes / 1e6
+            logger.info(f"Loaded {size_mb:.0f} MB into RAM")
+        return self._preloaded_cube
+
+    def release_cube(self):
+        """Release preloaded cube from memory."""
+        if self._preloaded_cube is not None:
+            self._preloaded_cube = None
+            logger.info("Released preloaded cube from memory")
 
     def close(self):
         """Close the NetCDF file and clear cache."""
         self.clear_cache()
+        self.release_cube()
         self.ds.close()
