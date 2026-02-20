@@ -2,12 +2,12 @@
 #
 # Installation:
 #   conda env create -f environment.yml
-#   conda activate aviris_tools
+#   conda activate hyperspectra
 #
 # Or update existing:
 #   conda env update -f environment.yml
 
-name: aviris_tools
+name: hyperspectra
 
 channels:
   - conda-forge
@@ -15,7 +15,7 @@ channels:
 
 dependencies:
   # Core Python
-  - python>=3.9,<3.12
+  - python>=3.9
   - pip
 
   # Scientific computing

@@ -14,8 +14,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-# Add parent to path for legacy import (aviris_tools/ contains aviris_atm_correction_v2.py)
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add legacy_scripts to path for legacy import (aviris_atm_correction_v2.py)
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'legacy_scripts'))
 
 from aviris_tools.utils.config import get_config
 from aviris_tools.utils.memory import MemoryManager, get_available_memory

@@ -161,38 +161,43 @@ python -c "from hsi_toolkit import launch_dashboard; launch_dashboard()"
 
 **Coverage:** US regions with AVIRIS-3 flight lines. Tested on Santa Barbara coastal, Cuprite NV (mineral validation site), Southern California.
 
+**USGS Spectral Library (optional):** For material matching, download [USGS Spectral Library Version 7](https://crustal.usgs.gov/speclab/QueryAll07a.php) and place it in `aviris_tools/reference_spectra/usgs_v7/`. This is not included in the repository due to size.
+
 ---
 
 ## Installation
 
 **Requirements:** Python 3.9+
 
+### Option A: Conda (recommended — includes viewer, Py6S, and all dependencies)
+
 ```bash
-# Clone
 git clone https://github.com/christophernagel/hyperspectra.git
 cd hyperspectra
-
-# Basic install
+conda env create -f environment.yml
+conda activate hyperspectra
 pip install -e .
-
-# With viewer
-pip install -e ".[viewer]"
-
-# With Py6S atmospheric correction
-pip install -e ".[py6s]"
-
-# Everything
-pip install -e ".[all]"
 ```
 
-For Py6S:
+For Py6S atmospheric correction, also install the 6S executable:
 ```bash
 conda install -c conda-forge sixs
 ```
 
-For interactive dashboard:
+### Option B: Pip (lightweight — core only, add extras as needed)
+
 ```bash
-pip install dash plotly
+git clone https://github.com/christophernagel/hyperspectra.git
+cd hyperspectra
+pip install -e .
+```
+
+Extras:
+```bash
+pip install -e ".[viewer]"      # Napari viewer + PyQt5
+pip install -e ".[py6s]"        # Py6S atmospheric correction
+pip install -e ".[dashboard]"   # Dash/Plotly interactive dashboard
+pip install -e ".[all]"         # Everything
 ```
 
 ---
@@ -227,49 +232,41 @@ aviris-config --show    # Show current config
 
 ```
 hyperspectra/
-├── hyperspectral_viewer_v4.py      # Main Napari viewer
-├── aviris_atm_correction_v2.py     # L1B → L2 correction
-├── cli.py                          # Command line interface
+├── aviris_tools/                    # Main package
+│   ├── cli.py                       # Command line interface
+│   ├── atm_correction/              # Atmospheric correction
+│   │   ├── py6s_processor.py        # Py6S radiative transfer
+│   │   └── isofit_processor.py      # ISOFIT optimal estimation
+│   ├── indices/                     # Spectral indices
+│   │   ├── vegetation.py            # NDVI, NDRE, etc.
+│   │   ├── minerals.py              # Clay, carbonate, iron
+│   │   ├── hydrocarbons.py          # Hydrocarbon detection
+│   │   └── spectral_library.py      # Reference spectra
+│   ├── viewer/                      # Viewer components
+│   │   ├── app.py                   # HyperspectralViewer class
+│   │   ├── data_loader.py           # Lazy NetCDF loading
+│   │   └── constants.py             # Spectral features, references
+│   ├── utils/                       # Utilities
+│   │   ├── envi_io.py               # ENVI format I/O
+│   │   ├── memory.py                # Memory management
+│   │   └── config.py                # Configuration
+│   ├── reference_spectra/           # Spectral reference data
+│   └── tests/                       # Test suite
 │
-├── atm_correction/                 # Atmospheric correction
-│   ├── py6s_processor.py           # Py6S radiative transfer
-│   └── isofit_processor.py         # ISOFIT optimal estimation
+├── hsi_toolkit/                     # Learning suite (independent package)
+│   ├── atmosphere/                  # Atmospheric RT simulation
+│   ├── sensor/                      # Sensor physics
+│   ├── forward_model/               # Imaging chain
+│   └── visualization/               # Interactive tools
 │
-├── indices/                        # Spectral indices
-│   ├── vegetation.py               # NDVI, NDRE, etc.
-│   ├── minerals.py                 # Clay, carbonate, iron
-│   ├── hydrocarbons.py             # Hydrocarbon detection
-│   └── spectral_library.py         # Reference spectra
+├── legacy_scripts/                  # Standalone processing scripts
+│   ├── aviris_atm_correction_v2.py  # L1B → L2 correction
+│   ├── aviris_isofit_processor.py   # ISOFIT processing
+│   └── hyperspectral_viewer_v4.py   # Original Napari viewer
 │
-├── viewer/                         # Viewer components
-│   ├── app.py                      # HyperspectralViewer class
-│   ├── data_loader.py              # Lazy NetCDF loading
-│   └── constants.py                # Spectral features, references
-│
-├── hsi_toolkit/                    # Learning suite
-│   ├── atmosphere/                 # Atmospheric RT simulation
-│   │   ├── gas_absorption.py       # H2O, O2, CO2, O3 bands
-│   │   ├── rayleigh_scattering.py  # Molecular scattering
-│   │   ├── aerosol_scattering.py   # Mie scattering
-│   │   └── atmosphere_simulator.py # Complete model
-│   ├── sensor/                     # Sensor physics
-│   │   ├── pushbroom_geometry.py   # Scan geometry
-│   │   ├── grating_dispersion.py   # Spectral dispersion
-│   │   ├── detector_model.py       # Noise sources
-│   │   └── sensor_simulator.py     # Complete model
-│   ├── forward_model/              # Imaging chain
-│   │   ├── forward_model.py        # Surface → sensor
-│   │   └── radiative_transfer.py   # Core RT equations
-│   └── visualization/              # Interactive tools
-│       ├── hsi_visualizer.py       # Matplotlib plots
-│       └── dashboard.py            # Dash web interface
-│
-├── utils/                          # Utilities
-│   ├── envi_io.py                  # ENVI format I/O
-│   ├── memory.py                   # Memory management
-│   └── config.py                   # Configuration
-│
-└── reference_spectra/              # Spectral reference data
+├── pyproject.toml
+├── environment.yml
+└── requirements.txt
 ```
 
 ---

@@ -19,8 +19,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-# Add parent to path for legacy import
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add legacy_scripts to path for legacy import
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'legacy_scripts'))
 
 from aviris_tools.utils.config import get_config
 from aviris_tools.utils.memory import MemoryManager

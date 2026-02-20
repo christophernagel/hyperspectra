@@ -171,7 +171,7 @@ class TestClayIndices:
         self, kaolinite_spectrum, aviris3_wavelengths
     ):
         """Clay index > 1 for kaolinite spectrum (Ninomiya, 2003)."""
-        from indices.minerals import clay_index
+        from aviris_tools.indices.minerals import clay_index
 
         ci = clay_index(kaolinite_spectrum, aviris3_wavelengths)
 
@@ -182,7 +182,7 @@ class TestClayIndices:
         self, calcite_spectrum, aviris3_wavelengths
     ):
         """Clay index should be ~1 for non-clay minerals."""
-        from indices.minerals import clay_index
+        from aviris_tools.indices.minerals import clay_index
 
         ci = clay_index(calcite_spectrum, aviris3_wavelengths)
 
@@ -197,7 +197,7 @@ class TestClayIndices:
 
         Reference: Hunt & Salisbury (1970)
         """
-        from indices.utils import get_band
+        from aviris_tools.indices.utils import get_band
 
         r_2165 = get_band(kaolinite_spectrum, aviris3_wavelengths, 2165)
         r_2205 = get_band(kaolinite_spectrum, aviris3_wavelengths, 2205)
@@ -224,7 +224,7 @@ class TestCarbonateIndices:
         self, calcite_spectrum, aviris3_wavelengths
     ):
         """Carbonate index > 1 for calcite (Ninomiya, 2003)."""
-        from indices.minerals import carbonate_index
+        from aviris_tools.indices.minerals import carbonate_index
 
         cari = carbonate_index(calcite_spectrum, aviris3_wavelengths)
 
@@ -238,7 +238,7 @@ class TestCarbonateIndices:
 
         Reference: Gaffey (1986) - Mg shifts CO3 absorption shorter
         """
-        from indices.minerals import calcite_index, dolomite_index
+        from aviris_tools.indices.minerals import calcite_index, dolomite_index
 
         # Calcite should have stronger 2340nm absorption
         calc_ci = calcite_index(calcite_spectrum, aviris3_wavelengths)
@@ -272,7 +272,7 @@ class TestHydrocarbonIndices:
 
         The Hydrocarbon Index uses the 1730nm C-H absorption.
         """
-        from indices.hydrocarbons import hydrocarbon_index
+        from aviris_tools.indices.hydrocarbons import hydrocarbon_index
 
         hi = hydrocarbon_index(oil_spectrum, aviris3_wavelengths)
 
@@ -283,7 +283,7 @@ class TestHydrocarbonIndices:
         self, vegetation_spectrum, aviris3_wavelengths
     ):
         """HI should be ~0 for non-hydrocarbon materials."""
-        from indices.hydrocarbons import hydrocarbon_index
+        from aviris_tools.indices.hydrocarbons import hydrocarbon_index
 
         hi = hydrocarbon_index(vegetation_spectrum, aviris3_wavelengths)
 
@@ -299,7 +299,7 @@ class TestHydrocarbonIndices:
 
         Reference: Cloutis (1989) Science
         """
-        from indices.hydrocarbons import hydrocarbon_absorption_depth
+        from aviris_tools.indices.hydrocarbons import hydrocarbon_absorption_depth
 
         ad = hydrocarbon_absorption_depth(oil_spectrum, aviris3_wavelengths, band='1730')
 
@@ -320,7 +320,7 @@ class TestNitrogenIndices:
 
     def test_ndni_range(self, vegetation_spectrum, aviris3_wavelengths):
         """NDNI should be in -1 to 1 range."""
-        from indices.nitrogen import ndni
+        from aviris_tools.indices.nitrogen import ndni
 
         ndni_val = ndni(vegetation_spectrum, aviris3_wavelengths)
 
@@ -330,7 +330,7 @@ class TestNitrogenIndices:
         self, vegetation_spectrum, aviris3_wavelengths
     ):
         """Protein index should detect N-H absorption in vegetation."""
-        from indices.nitrogen import protein_index
+        from aviris_tools.indices.nitrogen import protein_index
 
         pi = protein_index(vegetation_spectrum, aviris3_wavelengths)
 
@@ -349,7 +349,7 @@ class TestPhysicalConstraints:
         self, kaolinite_spectrum, aviris3_wavelengths
     ):
         """Absorption depth must be 0-1."""
-        from indices.minerals import clay_absorption_depth
+        from aviris_tools.indices.minerals import clay_absorption_depth
 
         ad = clay_absorption_depth(kaolinite_spectrum, aviris3_wavelengths)
 
@@ -357,7 +357,7 @@ class TestPhysicalConstraints:
 
     def test_indices_handle_nodata(self, aviris3_wavelengths):
         """Indices should handle NaN/Inf gracefully."""
-        from indices.minerals import clay_index
+        from aviris_tools.indices.minerals import clay_index
 
         # Spectrum with NaN
         bad_spectrum = np.ones(len(aviris3_wavelengths)) * np.nan
@@ -369,7 +369,7 @@ class TestPhysicalConstraints:
 
     def test_negative_reflectance_handling(self, aviris3_wavelengths):
         """Indices should handle negative reflectance (atmospheric correction artifacts)."""
-        from indices.hydrocarbons import hydrocarbon_index
+        from aviris_tools.indices.hydrocarbons import hydrocarbon_index
 
         # Spectrum with some negative values
         spectrum = np.ones(len(aviris3_wavelengths)) * 0.1
@@ -396,7 +396,7 @@ class TestLiteratureValues:
 
         Reference: Hunt (1977) Geophysics, 42(3), 501-513
         """
-        from indices.minerals import MINERAL_BANDS
+        from aviris_tools.indices.minerals import MINERAL_BANDS
 
         assert abs(MINERAL_BANDS['kaolinite_2'] - 2205) < 10, \
             "Kaolinite absorption should be at 2205nm"
@@ -407,7 +407,7 @@ class TestLiteratureValues:
 
         Reference: Gaffey (1986) American Mineralogist, 71, 151-162
         """
-        from indices.minerals import MINERAL_BANDS
+        from aviris_tools.indices.minerals import MINERAL_BANDS
 
         assert abs(MINERAL_BANDS['calcite'] - 2340) < 15, \
             "Calcite absorption should be at 2340nm"
@@ -418,7 +418,7 @@ class TestLiteratureValues:
 
         Reference: Gaffey (1986) - Mg cation mass shifts absorption
         """
-        from indices.minerals import MINERAL_BANDS
+        from aviris_tools.indices.minerals import MINERAL_BANDS
 
         calcite_wl = MINERAL_BANDS['calcite']
         dolomite_wl = MINERAL_BANDS['dolomite']
@@ -433,7 +433,7 @@ class TestLiteratureValues:
 
         Reference: Cloutis (1989) Science, 245, 165-168
         """
-        from indices.hydrocarbons import HYDROCARBON_BANDS
+        from aviris_tools.indices.hydrocarbons import HYDROCARBON_BANDS
 
         assert abs(HYDROCARBON_BANDS['ch_1st_overtone_1'] - 1730) < 25, \
             "C-H absorption should be at 1730nm"

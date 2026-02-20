@@ -88,8 +88,11 @@ packages = [
     "hsi_toolkit.examples",
 ]
 
+[tool.setuptools.package-data]
+aviris_tools = ["reference_spectra/*.json"]
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["aviris_tools/tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 
