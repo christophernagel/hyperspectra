@@ -43,7 +43,7 @@ class HSIVisualizer:
         """
         try:
             plt.style.use(style)
-        except:
+        except OSError:
             pass  # Use default if style not available
 
     def plot_atmospheric_transmittance(self,

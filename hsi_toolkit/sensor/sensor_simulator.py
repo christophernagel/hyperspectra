@@ -217,17 +217,20 @@ class SensorSimulator:
         n_lines, n_samples, n_wavelengths = radiance_cube.shape
         rng = np.random.RandomState(random_state)
 
-        # Output cube
-        dn_cube = np.zeros((n_lines, n_samples, n_wavelengths), dtype=np.uint16)
+        # Vectorized: reshape to (n_pixels, n_wavelengths), process all at once
+        flat_radiance = radiance_cube.reshape(-1, n_wavelengths)
 
-        # Process line by line (as a pushbroom scanner would)
-        for line in range(n_lines):
-            for sample in range(n_samples):
-                radiance_spectrum = radiance_cube[line, sample, :]
-                result = self.simulate_measurement(radiance_spectrum, add_noise, rng)
-                dn_cube[line, sample, :] = result['digital_number']
+        # Convert all pixels to electrons at once
+        signal_e = self.radiance_to_electrons(flat_radiance)
 
-        return dn_cube
+        # Apply detector model to all pixels at once
+        detection_result = self.detector.simulate_detection(
+            signal_e, self.integration_time,
+            add_noise=add_noise, random_state=rng
+        )
+
+        dn_flat = detection_result['digital_number']
+        return dn_flat.reshape(n_lines, n_samples, n_wavelengths).astype(np.uint16)
 
     def add_smile_distortion(self, datacube: np.ndarray,
                               smile_amplitude_nm: float = 0.5) -> np.ndarray:
@@ -250,15 +253,19 @@ class SensorSimulator:
         x = np.linspace(-1, 1, n_samples)
         smile_shift = smile_amplitude_nm * (x ** 2)  # nm shift
 
-        # Apply by interpolating spectra
+        # Vectorized: for each sample, all lines share the same shift
         distorted = np.zeros_like(datacube)
         for sample in range(n_samples):
             shifted_wavelengths = self.wavelengths + smile_shift[sample]
-            for line in range(n_lines):
-                spectrum = datacube[line, sample, :]
-                distorted[line, sample, :] = np.interp(
-                    self.wavelengths, shifted_wavelengths, spectrum
-                )
+            # Precompute fractional indices for this sample's shift
+            frac_idx = np.interp(self.wavelengths, shifted_wavelengths,
+                                 np.arange(n_bands)).astype(np.float64)
+            idx_lo = np.clip(np.floor(frac_idx).astype(int), 0, n_bands - 1)
+            idx_hi = np.clip(idx_lo + 1, 0, n_bands - 1)
+            weight = frac_idx - np.floor(frac_idx)
+            # Apply to all lines at once: (n_lines, n_bands)
+            spectra = datacube[:, sample, :]
+            distorted[:, sample, :] = spectra[:, idx_lo] * (1 - weight) + spectra[:, idx_hi] * weight
 
         return distorted
 
@@ -283,19 +290,19 @@ class SensorSimulator:
         wl_normalized = (self.wavelengths - self.wavelengths[0]) / (self.wavelengths[-1] - self.wavelengths[0])
         spatial_shift = keystone_pixels * (wl_normalized - 0.5)  # pixels
 
-        # Apply by shifting each band
+        # Vectorized: precompute interpolation weights per band, apply across all lines
+        x_orig = np.arange(n_samples, dtype=np.float64)
         distorted = np.zeros_like(datacube)
         for band in range(n_bands):
             shift = spatial_shift[band]
-            # Subpixel shift using interpolation
-            for line in range(n_lines):
-                x_orig = np.arange(n_samples)
-                x_shifted = x_orig - shift
-                distorted[line, :, band] = np.interp(
-                    x_orig, x_shifted, datacube[line, :, band],
-                    left=datacube[line, 0, band],
-                    right=datacube[line, -1, band]
-                )
+            x_shifted = x_orig + shift  # source positions for each output position
+            idx_lo = np.clip(np.floor(x_shifted).astype(int), 0, n_samples - 1)
+            idx_hi = np.clip(idx_lo + 1, 0, n_samples - 1)
+            weight = x_shifted - np.floor(x_shifted)
+            weight = np.clip(weight, 0, 1)
+            # Apply to all lines at once: (n_lines, n_samples)
+            band_data = datacube[:, :, band]
+            distorted[:, :, band] = band_data[:, idx_lo] * (1 - weight) + band_data[:, idx_hi] * weight
 
         return distorted
 

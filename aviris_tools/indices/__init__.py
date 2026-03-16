@@ -22,6 +22,7 @@ from .nitrogen import (
     ndni, nri, canopy_chlorophyll_index,
     protein_index
 )
+from .utils import validate_spectral_inputs
 
 __all__ = [
     # Vegetation
@@ -38,4 +39,6 @@ __all__ = [
     # Nitrogen/Agriculture
     'ndni', 'nri', 'canopy_chlorophyll_index',
     'protein_index',
+    # Validation
+    'validate_spectral_inputs',
 ]

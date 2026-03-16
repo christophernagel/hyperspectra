@@ -92,11 +92,15 @@ def ndni(
     r_1510 = get_band(rfl, wavelengths, 1510)
     r_1680 = get_band(rfl, wavelengths, 1680)
 
-    eps = 1e-10
-    log_1510 = np.log(1 / (r_1510 + eps))
-    log_1680 = np.log(1 / (r_1680 + eps))
+    # Use NaN (not 0) for invalid reflectance so it doesn't corrupt
+    # the normalized difference calculation
+    log_1510 = np.where(r_1510 > 0, np.log(1.0 / r_1510), np.nan)
+    log_1680 = np.where(r_1680 > 0, np.log(1.0 / r_1680), np.nan)
 
-    ndni_val = (log_1510 - log_1680) / (log_1510 + log_1680 + eps)
+    denom = log_1510 + log_1680
+    valid = np.isfinite(denom) & (np.abs(denom) > 1e-10)
+    ndni_val = np.divide(log_1510 - log_1680, denom,
+                         out=np.full_like(log_1510, np.nan, dtype=np.float64), where=valid)
 
     return ndni_val
 
@@ -164,8 +168,7 @@ def canopy_chlorophyll_index(
     # NDVI
     ndvi_val = normalized_difference(rfl, wavelengths, 860, 650)
 
-    eps = 1e-10
-    ccci = ndre / (ndvi_val + eps)
+    ccci = np.divide(ndre, ndvi_val, out=np.zeros_like(ndre, dtype=np.float64), where=ndvi_val != 0)
 
     return ccci
 
@@ -250,8 +253,7 @@ def nitrogen_stress_index(
     pi = protein_index(rfl, wavelengths)
     cai = cellulose_absorption_index(rfl, wavelengths)
 
-    eps = 1e-10
-    nsi = cai / (pi + eps)
+    nsi = np.divide(cai, pi, out=np.zeros_like(cai, dtype=np.float64), where=pi != 0)
 
     return nsi
 

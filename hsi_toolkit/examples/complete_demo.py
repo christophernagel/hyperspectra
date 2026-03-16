@@ -29,6 +29,8 @@ from hsi_toolkit import (
     RayleighScattering, GasAbsorption, AerosolScattering,
     GratingDispersion, DetectorModel
 )
+from hsi_toolkit.atmosphere.gas_absorption import CombinedGasAbsorption
+from hsi_toolkit.atmosphere.aerosol_scattering import AerosolType
 
 
 def demo_atmospheric_effects():
@@ -41,9 +43,9 @@ def demo_atmospheric_effects():
     wavelengths = np.linspace(380, 2500, 500)
 
     # Initialize atmospheric components
-    rayleigh = RayleighScattering()
-    gas = GasAbsorption()
-    aerosol = AerosolScattering()
+    rayleigh = RayleighScattering(wavelengths)
+    gas = CombinedGasAbsorption(wavelengths)
+    aerosol = AerosolScattering(wavelengths)
 
     # 1. Rayleigh scattering explanation
     print("\n1. RAYLEIGH SCATTERING (Why the sky is blue)")
@@ -51,12 +53,12 @@ def demo_atmospheric_effects():
     print(rayleigh.explain_blue_sky())
 
     # Calculate Rayleigh optical depth
-    tau_rayleigh = rayleigh.optical_depth(wavelengths)
+    tau_rayleigh = rayleigh.optical_depth()
 
     # 2. Gas absorption
     print("\n2. GAS ABSORPTION BANDS")
     print("-" * 50)
-    T_gas = gas.combined_transmission(wavelengths, pwv_cm=2.0, ozone_atm_cm=0.34)
+    T_gas = gas.transmission(pwv_cm=2.0, ozone_du=300.0)
 
     print("Major absorption bands:")
     print("  H₂O: 720, 820, 940, 1140, 1380, 1880 nm")
@@ -68,10 +70,18 @@ def demo_atmospheric_effects():
     print("\n3. AEROSOL SCATTERING")
     print("-" * 50)
     print("Different aerosol types:")
-    for atype in ['continental', 'maritime', 'urban', 'desert']:
-        aerosol_temp = AerosolScattering(aerosol_type=atype, aod_550=0.2)
-        aod_at_1000 = aerosol_temp.optical_depth(np.array([1000]))[0]
-        print(f"  {atype:12s}: AOD(1000nm) = {aod_at_1000:.3f}")
+    atype_map = {
+        'continental': AerosolType.CONTINENTAL,
+        'maritime': AerosolType.MARITIME,
+        'urban': AerosolType.URBAN,
+        'desert': AerosolType.DESERT,
+    }
+    for atype_name, atype_enum in atype_map.items():
+        aerosol_temp = AerosolScattering(wavelengths, aerosol_type=atype_enum)
+        aod_all = aerosol_temp.optical_depth(aod_550=0.2)
+        idx_1000 = np.argmin(np.abs(wavelengths - 1000))
+        aod_at_1000 = aod_all[idx_1000]
+        print(f"  {atype_name:12s}: AOD(1000nm) = {aod_at_1000:.3f}")
 
     # Plot
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -100,11 +110,11 @@ def demo_atmospheric_effects():
 
     # Aerosol comparison
     ax = axes[1, 0]
-    for atype, color in [('continental', 'brown'), ('maritime', 'blue'),
-                         ('urban', 'gray'), ('desert', 'orange')]:
-        aerosol_temp = AerosolScattering(aerosol_type=atype, aod_550=0.2)
-        T_aerosol = aerosol_temp.transmission(wavelengths)
-        ax.plot(wavelengths, T_aerosol, label=atype, color=color, linewidth=1.5)
+    for atype_name, color in [('continental', 'brown'), ('maritime', 'blue'),
+                               ('urban', 'gray'), ('desert', 'orange')]:
+        aerosol_temp = AerosolScattering(wavelengths, aerosol_type=atype_map[atype_name])
+        T_aerosol = aerosol_temp.transmission(aod_550=0.2)
+        ax.plot(wavelengths, T_aerosol, label=atype_name, color=color, linewidth=1.5)
 
     ax.set_xlabel('Wavelength (nm)')
     ax.set_ylabel('Transmittance')
@@ -114,8 +124,9 @@ def demo_atmospheric_effects():
 
     # Combined transmittance
     ax = axes[1, 1]
-    T_rayleigh = rayleigh.transmission(wavelengths, solar_zenith_deg=30, view_zenith_deg=0)
-    T_aerosol = AerosolScattering(aod_550=0.15).transmission(wavelengths)
+    airmass_30 = 1.0 / np.cos(np.radians(30))
+    T_rayleigh = rayleigh.transmission(airmass=airmass_30)
+    T_aerosol = AerosolScattering(wavelengths).transmission(aod_550=0.15)
     T_total = T_gas * T_rayleigh * T_aerosol
 
     ax.fill_between(wavelengths, 0, T_total, alpha=0.3, label='Total')

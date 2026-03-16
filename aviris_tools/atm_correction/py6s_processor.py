@@ -9,18 +9,34 @@ This module wraps the aviris_atm_correction_v2.py with:
 For direct CLI usage, use aviris_atm_correction_v2.py directly.
 """
 
-import sys
+import importlib.util
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
-
-# Add legacy_scripts to path for legacy import (aviris_atm_correction_v2.py)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'legacy_scripts'))
+from typing import Optional
 
 from aviris_tools.utils.config import get_config
-from aviris_tools.utils.memory import MemoryManager, get_available_memory
+from aviris_tools.utils.memory import MemoryManager
+
+# Path to vendored legacy module
+_LEGACY_DIR = Path(__file__).parent.parent.parent / 'legacy_scripts'
+_LEGACY_MODULE = _LEGACY_DIR / 'aviris_atm_correction_v2.py'
 
 logger = logging.getLogger(__name__)
+
+
+def _import_legacy_module():
+    """Import aviris_atm_correction_v2 from legacy_scripts without sys.path mutation."""
+    if not _LEGACY_MODULE.exists():
+        raise ImportError(
+            f"Legacy module not found: {_LEGACY_MODULE}\n"
+            "Ensure aviris_atm_correction_v2.py is in the legacy_scripts/ directory."
+        )
+    spec = importlib.util.spec_from_file_location(
+        "aviris_atm_correction_v2", str(_LEGACY_MODULE)
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class Py6SProcessor:
@@ -61,8 +77,12 @@ class Py6SProcessor:
         config = get_config()
 
         # Apply config defaults
-        self.aerosol_model = aerosol_model or config.get('atmospheric', 'aerosol_model', default='continental')
-        self.altitude_km = altitude_km or config.get('atmospheric', 'default_altitude_km', default=8.5)
+        self.aerosol_model = aerosol_model or config.get(
+            'atmospheric', 'aerosol_model', default='continental'
+        )
+        self.altitude_km = altitude_km or config.get(
+            'atmospheric', 'default_altitude_km', default=8.5
+        )
         self.validate = validate
         self.coastal_correction = coastal_correction
         self.estimate_uncertainty = estimate_uncertainty
@@ -78,7 +98,7 @@ class Py6SProcessor:
         if not self.obs_path.exists():
             raise FileNotFoundError(f"Observation file not found: {self.obs_path}")
 
-        logger.info(f"Py6SProcessor initialized")
+        logger.info("Py6SProcessor initialized")
         logger.info(f"  Radiance: {self.radiance_path.name}")
         logger.info(f"  Observation: {self.obs_path.name}")
         logger.info(f"  Output: {self.output_path}")
@@ -95,12 +115,14 @@ class Py6SProcessor:
         Returns:
             Path to output file
         """
-        # Import the legacy processor
+        # Import the legacy processor via importlib (no sys.path pollution)
         try:
-            # Apply config patches before importing
-            self._patch_legacy_config()
+            legacy = _import_legacy_module()
 
-            from aviris_atm_correction_v2 import AVIRISL2Processor
+            # Apply config patches before using
+            self._patch_legacy_config(legacy)
+
+            AVIRISL2Processor = legacy.AVIRISL2Processor
 
             processor = AVIRISL2Processor(
                 str(self.radiance_path),
@@ -127,10 +149,8 @@ class Py6SProcessor:
             logger.error("Ensure aviris_atm_correction_v2.py is in the path")
             raise
 
-    def _patch_legacy_config(self):
+    def _patch_legacy_config(self, legacy):
         """Patch legacy module constants with config values."""
-        import aviris_atm_correction_v2 as legacy
-
         config = get_config()
 
         # Patch memory limit
@@ -175,7 +195,7 @@ class Py6SProcessor:
                 if max_val > 1.0:
                     logger.warning(f"  Reflectance > 1.0 detected: {max_val:.4f}")
                 if mean_val < 0.01:
-                    logger.warning(f"  Very low mean reflectance - check atmospheric parameters")
+                    logger.warning("  Very low mean reflectance - check atmospheric parameters")
 
 
 def process_file(radiance_path: str,

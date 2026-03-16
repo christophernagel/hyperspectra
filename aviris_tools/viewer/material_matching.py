@@ -146,33 +146,33 @@ class MaterialMatcher:
         # Resample to library grid
         resampled = self.resample_to_library(spectrum)
 
-        # Compute matches
-        matches = []
+        # Compute matches — vectorized for SAM and euclidean
         unknown_valid = np.nan_to_num(resampled, nan=0)
-        unknown_norm = unknown_valid / (np.linalg.norm(unknown_valid) + 1e-10)
+        names = list(self.library['spectra'].keys())
+        lib_matrix = np.array([
+            np.nan_to_num(self.library['spectra'][n]['reflectance'], nan=0)
+            for n in names
+        ])  # (n_spectra, n_bands)
 
-        for name, spec_data in self.library['spectra'].items():
-            ref = spec_data['reflectance']
-            ref_valid = np.nan_to_num(ref, nan=0)
-            ref_norm = ref_valid / (np.linalg.norm(ref_valid) + 1e-10)
+        if method == 'sam':
+            unknown_norm = unknown_valid / (np.linalg.norm(unknown_valid) + 1e-10)
+            lib_norms = lib_matrix / (np.linalg.norm(lib_matrix, axis=1, keepdims=True) + 1e-10)
+            scores = np.arccos(np.clip(lib_norms @ unknown_norm, -1, 1))
+        elif method == 'correlation':
+            u_centered = unknown_valid - np.mean(unknown_valid)
+            l_centered = lib_matrix - np.mean(lib_matrix, axis=1, keepdims=True)
+            u_std = np.linalg.norm(u_centered) + 1e-10
+            l_std = np.linalg.norm(l_centered, axis=1) + 1e-10
+            scores = -(l_centered @ u_centered) / (l_std * u_std)  # negate so lower = better match
+        else:  # euclidean
+            scores = np.linalg.norm(lib_matrix - unknown_valid, axis=1)
 
-            if method == 'sam':
-                # Spectral Angle Mapper (lower = more similar)
-                dot_product = np.clip(np.dot(unknown_norm, ref_norm), -1, 1)
-                score = np.arccos(dot_product)
-            elif method == 'correlation':
-                # Pearson correlation (higher = more similar)
-                score = np.corrcoef(unknown_valid, ref_valid)[0, 1]
-                if np.isnan(score):
-                    score = 0
-            else:  # euclidean
-                score = np.linalg.norm(unknown_valid - ref_valid)
+        matches = list(zip(names, scores.tolist()))
 
-            matches.append((name, score))
-
-        # Sort
+        # Sort (lower = better for all methods; correlation was negated)
         if method == 'correlation':
-            matches.sort(key=lambda x: -x[1])
+            matches.sort(key=lambda x: x[1])
+            matches = [(n, -s) for n, s in matches]  # restore positive correlation
         else:
             matches.sort(key=lambda x: x[1])
 

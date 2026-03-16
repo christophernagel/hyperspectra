@@ -252,7 +252,7 @@ def identify_mineral(
                     elif float(ad) > 0.01:  # Some absorption present
                         score += 0.5
                 n_features += 1
-            except:
+            except (ValueError, IndexError):
                 pass
 
         # Check secondary absorptions
@@ -263,7 +263,7 @@ def identify_mineral(
                 if float(ad) > 0.02:
                     score += 0.3
                 n_features += 0.5
-            except:
+            except (ValueError, IndexError):
                 pass
 
         # Normalize score

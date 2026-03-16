@@ -11,7 +11,37 @@ References:
 """
 
 import numpy as np
-from typing import Union, Optional, Tuple
+from typing import Tuple
+
+
+def validate_spectral_inputs(rfl: np.ndarray, wavelengths: np.ndarray) -> None:
+    """
+    Validate reflectance and wavelength arrays for spectral index computation.
+
+    Checks:
+        - rfl is 1D (single pixel) or 3D (image cube)
+        - wavelengths is 1D
+        - spectral axis of rfl matches len(wavelengths)
+
+    Raises:
+        ValueError: If validation fails
+    """
+    if rfl.ndim not in (1, 3):
+        raise ValueError(
+            f"rfl must be 1D (pixel) or 3D (y, x, bands), got {rfl.ndim}D "
+            f"with shape {rfl.shape}"
+        )
+    if wavelengths.ndim != 1:
+        raise ValueError(
+            f"wavelengths must be 1D, got {wavelengths.ndim}D "
+            f"with shape {wavelengths.shape}"
+        )
+    n_bands = rfl.shape[-1] if rfl.ndim == 3 else rfl.shape[0]
+    if n_bands != len(wavelengths):
+        raise ValueError(
+            f"Spectral dimension mismatch: rfl has {n_bands} bands "
+            f"but wavelengths has {len(wavelengths)} entries"
+        )
 
 
 def get_band(
@@ -33,6 +63,7 @@ def get_band(
         Reflectance values at nearest band
     """
     wavelengths = np.asarray(wavelengths)
+    validate_spectral_inputs(rfl, wavelengths)
     idx = np.argmin(np.abs(wavelengths - target_nm))
     actual = wavelengths[idx]
 
@@ -88,6 +119,16 @@ def interpolate_band(
         Interpolated reflectance values
     """
     wavelengths = np.asarray(wavelengths)
+    validate_spectral_inputs(rfl, wavelengths)
+
+    # Warn if target is outside the wavelength range (extrapolation)
+    if target_nm < wavelengths[0] or target_nm > wavelengths[-1]:
+        import warnings
+        warnings.warn(
+            f"interpolate_band: target {target_nm}nm is outside data range "
+            f"[{wavelengths[0]:.1f}, {wavelengths[-1]:.1f}]nm; "
+            f"returning nearest edge band (no extrapolation)"
+        )
 
     # Find bracketing bands
     idx_upper = np.searchsorted(wavelengths, target_nm)
@@ -154,11 +195,14 @@ def continuum_removal(
     else:
         rfl_subset = rfl[:, :, mask]
         # Broadcast for 3D array
-        continuum = r_start[:, :, np.newaxis] + \
-                    slope[:, :, np.newaxis] * (wl_subset - wl_start)
+        continuum = (
+            r_start[:, :, np.newaxis]
+            + slope[:, :, np.newaxis] * (wl_subset - wl_start)
+        )
 
-    eps = 1e-10
-    cr_rfl = rfl_subset / (continuum + eps)
+    cr_rfl = np.divide(rfl_subset, continuum,
+                       out=np.zeros_like(rfl_subset, dtype=np.float64),
+                       where=continuum != 0)
 
     return cr_rfl, continuum
 
@@ -199,11 +243,10 @@ def absorption_depth(
     weight = (target - left) / (right - left)
     r_continuum = r_left * (1 - weight) + r_right * weight
 
-    eps = 1e-10
-    depth = 1.0 - (r_target / (r_continuum + eps))
-
-    # Clamp to valid range
-    depth = np.clip(depth, 0, 1)
+    ratio = np.divide(r_target, r_continuum,
+                      out=np.ones_like(r_target, dtype=np.float64),
+                      where=r_continuum != 0)
+    depth = np.clip(1.0 - ratio, 0, 1)
 
     return depth
 
@@ -229,8 +272,7 @@ def band_ratio(
     r_num = get_band(rfl, wavelengths, numerator_nm)
     r_den = get_band(rfl, wavelengths, denominator_nm)
 
-    eps = 1e-10
-    return r_num / (r_den + eps)
+    return np.divide(r_num, r_den, out=np.zeros_like(r_num, dtype=np.float64), where=r_den != 0)
 
 
 def normalized_difference(
@@ -254,5 +296,5 @@ def normalized_difference(
     r1 = get_band(rfl, wavelengths, band1_nm)
     r2 = get_band(rfl, wavelengths, band2_nm)
 
-    eps = 1e-10
-    return (r1 - r2) / (r1 + r2 + eps)
+    denom = r1 + r2
+    return np.divide(r1 - r2, denom, out=np.zeros_like(r1, dtype=np.float64), where=denom != 0)

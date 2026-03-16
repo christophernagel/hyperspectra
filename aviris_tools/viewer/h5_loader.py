@@ -34,6 +34,7 @@ import numpy as np
 import h5py
 from pathlib import Path
 import logging
+from scipy.ndimage import uniform_filter
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,7 @@ class LazyH5Data:
             return self._preloaded_cube[band_idx]
 
         if band_idx in self._band_cache:
+            self._band_cache[band_idx] = self._band_cache.pop(band_idx)  # LRU promote
             return self._band_cache[band_idx]
 
         # Load based on layout
@@ -262,7 +264,7 @@ class LazyH5Data:
 
         # Cache management
         if len(self._band_cache) >= self._cache_max_size:
-            del self._band_cache[next(iter(self._band_cache))]
+            del self._band_cache[next(iter(self._band_cache))]  # evict LRU
 
         self._band_cache[band_idx] = band_data
         return band_data
@@ -293,7 +295,10 @@ class LazyH5Data:
         band_before = self.get_band(idx - 1).astype(np.float64)
         band_after = self.get_band(idx).astype(np.float64)
 
-        fraction = (target_wavelength - wl_before) / (wl_after - wl_before)
+        denom = wl_after - wl_before
+        if denom == 0:
+            return band_before.astype(np.float32)
+        fraction = (target_wavelength - wl_before) / denom
         interpolated = band_before * (1 - fraction) + band_after * fraction
 
         return interpolated.astype(np.float32)
@@ -365,7 +370,6 @@ class LazyH5Data:
             center_clean[nan_mask] = np.nanmedian(center_clean)
 
         # Local SNR estimation
-        from scipy.ndimage import uniform_filter
         local_mean = uniform_filter(center_clean, size=5)
         variance = uniform_filter((center_clean - local_mean) ** 2, size=5)
         local_std = np.sqrt(np.maximum(variance, 0))
@@ -402,6 +406,13 @@ class LazyH5Data:
         """Close the HDF5 file and clear cache."""
         self.clear_cache()
         self.h5.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
 
     # -------------------------------------------------------------------------
     # Wavelength range validation (critical for index calculations)
@@ -545,35 +556,3 @@ def explore_h5(filepath):
                 print("  -> HyperspecI D2 (400-1700nm, 131 bands)")
 
     return structure
-
-
-# -------------------------------------------------------------------------
-# Factory function for unified loading
-# -------------------------------------------------------------------------
-
-def load_hyperspectral(filepath):
-    """
-    Load hyperspectral data from any supported format.
-
-    Auto-detects file type and returns appropriate loader.
-
-    Parameters
-    ----------
-    filepath : str or Path
-        Path to data file (.nc, .h5, .hdf5)
-
-    Returns
-    -------
-    loader : LazyHyperspectralData or LazyH5Data
-        Data loader with unified interface
-    """
-    filepath = Path(filepath)
-    suffix = filepath.suffix.lower()
-
-    if suffix == '.nc':
-        from .data_loader import LazyHyperspectralData
-        return LazyHyperspectralData(filepath)
-    elif suffix in ('.h5', '.hdf5', '.hdf'):
-        return LazyH5Data(filepath)
-    else:
-        raise ValueError(f"Unsupported file format: {suffix}")

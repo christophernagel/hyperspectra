@@ -8,7 +8,6 @@ Features:
     - Garbage collection helpers
 """
 
-import os
 import gc
 import logging
 import numpy as np
@@ -178,8 +177,16 @@ def chunk_array(array: np.ndarray, chunk_size_mb: float = 512,
     Yields:
         (chunk_array, start_index) tuples
     """
+    if axis < 0 or axis >= array.ndim:
+        raise ValueError(
+            f"axis {axis} out of range for {array.ndim}D array"
+        )
+
     chunk_bytes = chunk_size_mb * 1024 * 1024
-    slice_size = array[0].nbytes if axis == 0 else array[:, 0].nbytes
+    # Compute size of one slice along the given axis
+    slicing = [slice(None)] * array.ndim
+    slicing[axis] = 0
+    slice_size = array[tuple(slicing)].nbytes
     n_slices = max(1, int(chunk_bytes / slice_size))
 
     total = array.shape[axis]

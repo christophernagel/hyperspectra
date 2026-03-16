@@ -2166,11 +2166,18 @@ class AVIRISL2Processor:
         self.sensor_zenith = float(np.nanmean(op.variables['to_sensor_zenith'][:]))
         self.sensor_azimuth = float(np.nanmean(op.variables['to_sensor_azimuth'][:]))
         
-        # Per-pixel illumination cosine
+        # Per-pixel illumination cosine (convert from masked array to regular)
         if 'cosine_i' in op.variables:
-            self.cosine_i = op.variables['cosine_i'][:]
+            self.cosine_i = np.ma.filled(op.variables['cosine_i'][:], np.cos(np.radians(self.sun_zenith)))
         else:
             self.cosine_i = np.cos(np.radians(self.sun_zenith)) * np.ones((self.n_rows, self.n_cols))
+
+        if self.cosine_i.shape != (self.n_rows, self.n_cols):
+            logger.warning(f"cosine_i shape {self.cosine_i.shape} != radiance shape ({self.n_rows}, {self.n_cols}), broadcasting")
+            self.cosine_i = np.broadcast_to(
+                np.cos(np.radians(self.sun_zenith)) * np.ones((self.n_rows, self.n_cols)),
+                (self.n_rows, self.n_cols)
+            )
         
         # Ground elevation
         if 'elev' in self.obs_ds.variables:
@@ -2500,9 +2507,13 @@ class AVIRISL2Processor:
         # Earth-Sun distance correction
         d_corr = 1.0 / (self.earth_sun_distance ** 2)
         
-        # Per-pixel illumination
-        cos_illum = np.clip(self.cosine_i, 0.1, 1.0)
-        
+        # Per-pixel illumination — ensure regular array with correct shape
+        cos_illum = np.asarray(np.clip(self.cosine_i, 0.1, 1.0))
+        expected_shape = (self.n_rows, self.n_cols)
+        if cos_illum.shape != expected_shape:
+            logger.error(f"cos_illum shape {cos_illum.shape} != expected {expected_shape}, using scalar fallback")
+            cos_illum = np.full(expected_shape, float(cos_sza), dtype=np.float64)
+
         for i, wl in enumerate(self.wavelengths):
             L = self.radiance[i, :, :]
             

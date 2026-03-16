@@ -12,6 +12,7 @@ import numpy as np
 import netCDF4 as nc
 from pathlib import Path
 import logging
+from scipy.ndimage import uniform_filter
 
 from .constants import ATMOSPHERIC_BANDS, DEFAULT_CACHE_SIZE
 
@@ -162,12 +163,13 @@ class LazyHyperspectralData:
             return self._preloaded_cube[band_idx]
 
         if band_idx in self._band_cache:
+            self._band_cache[band_idx] = self._band_cache.pop(band_idx)  # LRU promote
             return self._band_cache[band_idx]
 
         band_data = self.data_var[band_idx, :, :].astype(np.float32)
 
         if len(self._band_cache) >= self._cache_max_size:
-            del self._band_cache[next(iter(self._band_cache))]
+            del self._band_cache[next(iter(self._band_cache))]  # evict LRU
 
         self._band_cache[band_idx] = band_data
         return band_data
@@ -228,7 +230,10 @@ class LazyHyperspectralData:
         band_after = self.get_band(idx).astype(np.float64)
 
         # Linear interpolation
-        fraction = (target_wavelength - wl_before) / (wl_after - wl_before)
+        denom = wl_after - wl_before
+        if denom == 0:
+            return band_before.astype(np.float32)
+        fraction = (target_wavelength - wl_before) / denom
         interpolated = band_before * (1 - fraction) + band_after * fraction
 
         return interpolated.astype(np.float32)
@@ -355,7 +360,6 @@ class LazyHyperspectralData:
             center_clean[nan_mask] = np.nanmedian(center_clean)
 
         # Local SNR estimation using small windows
-        from scipy.ndimage import uniform_filter
         local_mean = uniform_filter(center_clean, size=5)
         variance = uniform_filter((center_clean - local_mean) ** 2, size=5)
         # Ensure non-negative before sqrt (numerical precision issues)
@@ -463,3 +467,10 @@ class LazyHyperspectralData:
         self.clear_cache()
         self.release_cube()
         self.ds.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False

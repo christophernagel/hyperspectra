@@ -132,11 +132,18 @@ class Config:
             if env_var in os.environ:
                 section, key = config_path
                 value = os.environ[env_var]
-                # Type conversion
-                if key in ['limit_gb']:
-                    value = float(value)
-                elif key in ['n_cores']:
-                    value = int(value)
+                # Type conversion with error handling
+                try:
+                    if key in ['limit_gb']:
+                        value = float(value)
+                    elif key in ['n_cores']:
+                        value = int(value)
+                except (ValueError, TypeError):
+                    logger.warning(
+                        f"Invalid value for {env_var}={os.environ[env_var]!r}, "
+                        f"expected numeric; ignoring"
+                    )
+                    continue
                 self._config[section][key] = value
                 logger.debug(f"Config override from {env_var}: {section}.{key} = {value}")
 

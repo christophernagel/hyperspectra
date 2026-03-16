@@ -14,17 +14,14 @@ from pathlib import Path
 import logging
 
 from .data_loader import LazyHyperspectralData
-from .constants import (
-    INDEX_DEFINITIONS, ROBUST_PERCENTILE_LOW, ROBUST_PERCENTILE_HIGH,
-    LARGE_ARRAY_THRESHOLD, SAMPLE_SIZE
+from .constants import INDEX_DEFINITIONS
+from aviris_tools.compute import (
+    normalize_rgb,
+    calculate_nd_index,
+    calculate_ratio_index,
+    calculate_continuum_index,
+    robust_percentile,
 )
-
-# Import index calculation functions from the indices module
-try:
-    from aviris_tools.indices import utils as idx_utils
-    HAS_INDICES_MODULE = True
-except ImportError:
-    HAS_INDICES_MODULE = False
 
 logger = logging.getLogger(__name__)
 
@@ -108,20 +105,11 @@ class HyperspectralViewer:
         """
         logger.info(f"Creating composite: {name} (R={r_wl}, G={g_wl}, B={b_wl})")
 
-        # Get interpolated bands
         r_band = self.data_loader.get_interpolated_band(r_wl)
         g_band = self.data_loader.get_interpolated_band(g_wl)
         b_band = self.data_loader.get_interpolated_band(b_wl)
 
-        # Normalize each band
-        def normalize(band):
-            p2, p98 = np.nanpercentile(band, [2, 98])
-            if p98 <= p2:
-                return np.zeros_like(band)
-            return np.clip((band - p2) / (p98 - p2), 0, 1)
-
-        rgb = np.stack([normalize(r_band), normalize(g_band), normalize(b_band)], axis=-1)
-        rgb = np.nan_to_num(rgb, nan=0.0).astype(np.float32)
+        rgb = normalize_rgb(r_band, g_band, b_band)
 
         # Remove existing layer with same name
         self._remove_layer(name)
@@ -162,15 +150,18 @@ class HyperspectralViewer:
 
         idx_type = idx_def['type']
 
-        # Calculate based on type
         if idx_type == 'continuum':
-            index_data = self._calculate_continuum_index(
-                idx_def['feature'], idx_def['left'], idx_def['right']
+            index_data = calculate_continuum_index(
+                self.data_loader, idx_def['feature'], idx_def['left'], idx_def['right']
             )
+            # Desktop clips continuum to [0, 1] for display
+            index_data = np.clip(
+                np.nan_to_num(index_data, nan=0.0), 0, 1
+            ).astype(np.float32)
         elif idx_type == 'nd':
-            index_data = self._calculate_nd_index(idx_def['b1'], idx_def['b2'])
+            index_data = calculate_nd_index(self.data_loader, idx_def['b1'], idx_def['b2'])
         elif idx_type == 'ratio':
-            index_data = self._calculate_ratio_index(idx_def['b1'], idx_def['b2'])
+            index_data = calculate_ratio_index(self.data_loader, idx_def['b1'], idx_def['b2'])
         else:
             logger.error(f"Unknown index type: {idx_type}")
             return None
@@ -211,9 +202,9 @@ class HyperspectralViewer:
         logger.info(f"Calculating custom index: {name} ({index_type}: {b1_wl}/{b2_wl})")
 
         if index_type == 'nd':
-            index_data = self._calculate_nd_index(b1_wl, b2_wl)
+            index_data = calculate_nd_index(self.data_loader, b1_wl, b2_wl)
         else:
-            index_data = self._calculate_ratio_index(b1_wl, b2_wl)
+            index_data = calculate_ratio_index(self.data_loader, b1_wl, b2_wl)
 
         if index_data is None:
             return None
@@ -229,42 +220,6 @@ class HyperspectralViewer:
             'type': index_type,
             'uncertainty': None
         }
-
-    def _calculate_nd_index(self, b1_wl, b2_wl):
-        """Calculate normalized difference index: (b1-b2)/(b1+b2)"""
-        b1 = self.data_loader.get_interpolated_band(b1_wl).astype(np.float64)
-        b2 = self.data_loader.get_interpolated_band(b2_wl).astype(np.float64)
-
-        eps = 1e-10
-        result = (b1 - b2) / (b1 + b2 + eps)
-        return result.astype(np.float32)
-
-    def _calculate_ratio_index(self, b1_wl, b2_wl):
-        """Calculate band ratio index: b1/b2"""
-        b1 = self.data_loader.get_interpolated_band(b1_wl).astype(np.float64)
-        b2 = self.data_loader.get_interpolated_band(b2_wl).astype(np.float64)
-
-        eps = 1e-10
-        result = b1 / (b2 + eps)
-        return np.clip(result, 0.01, 10.0).astype(np.float32)
-
-    def _calculate_continuum_index(self, feature_wl, left_wl, right_wl):
-        """
-        Calculate continuum-removed absorption depth.
-
-        Absorption depth = 1 - (R_feature / R_continuum)
-        """
-        r_left = self.data_loader.get_interpolated_band(left_wl).astype(np.float64)
-        r_right = self.data_loader.get_interpolated_band(right_wl).astype(np.float64)
-        r_feature = self.data_loader.get_interpolated_band(feature_wl).astype(np.float64)
-
-        # Linear continuum at feature wavelength
-        weight = (feature_wl - left_wl) / (right_wl - left_wl)
-        r_continuum = r_left * (1 - weight) + r_right * weight
-
-        eps = 1e-10
-        depth = 1.0 - (r_feature / (r_continuum + eps))
-        return np.clip(depth, 0, 1).astype(np.float32)
 
     def _estimate_uncertainty(self, b1_wl, b2_wl, idx_type):
         """Estimate relative uncertainty for the index."""
@@ -311,20 +266,7 @@ class HyperspectralViewer:
 
     def _robust_percentile(self, data, percentiles=None):
         """Calculate robust percentiles, sampling if data is large."""
-        if percentiles is None:
-            percentiles = [ROBUST_PERCENTILE_LOW, ROBUST_PERCENTILE_HIGH]
-
-        flat = data.ravel()
-        valid = flat[~np.isnan(flat)]
-
-        if len(valid) == 0:
-            return [0, 1]
-
-        if len(valid) > LARGE_ARRAY_THRESHOLD:
-            indices = np.random.choice(len(valid), SAMPLE_SIZE, replace=False)
-            valid = valid[indices]
-
-        return [float(np.percentile(valid, p)) for p in percentiles]
+        return robust_percentile(data, percentiles=percentiles)
 
     # =========================================================================
     # ROI Spectral Extraction
@@ -412,8 +354,6 @@ def run_viewer(filepath=None):
     Args:
         filepath: Optional path to NetCDF file
     """
-    import sys
-
     if filepath:
         viewer = HyperspectralViewer(filepath)
 

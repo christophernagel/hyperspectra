@@ -200,11 +200,6 @@ class ForwardModel:
             Dictionary with radiance and DN cubes
         """
         n_lines, n_samples, n_bands = reflectance_cube.shape
-        rng = np.random.RandomState(random_state)
-
-        # Output arrays
-        radiance_cube = np.zeros_like(reflectance_cube)
-        dn_cube = np.zeros((n_lines, n_samples, n_bands), dtype=np.uint16)
 
         # Set atmospheric state (same for all pixels in simple model)
         self.atmosphere.update_state(
@@ -217,22 +212,15 @@ class ForwardModel:
             aerosol_type=scene.aerosol_type
         )
 
-        # Process each pixel
-        for line in range(n_lines):
-            for sample in range(n_samples):
-                refl = reflectance_cube[line, sample, :]
+        # Vectorized: atmosphere model broadcasts over (n_pixels, n_wavelengths)
+        flat_refl = reflectance_cube.reshape(-1, n_bands)
+        flat_radiance = self.atmosphere.radiance_at_sensor(flat_refl)
+        radiance_cube = flat_radiance.reshape(n_lines, n_samples, n_bands)
 
-                # Atmospheric forward model
-                radiance = self.atmosphere.radiance_at_sensor(refl)
-                radiance_cube[line, sample, :] = radiance
-
-                # Sensor model
-                sensor_result = self.sensor.simulate_measurement(
-                    atm_result['total_radiance'],
-                    add_noise=add_noise,
-                    random_state=rng
-                )
-                dn_cube[line, sample, :] = sensor_result['digital_number']
+        # Vectorized sensor model
+        dn_cube = self.sensor.simulate_datacube(
+            radiance_cube, add_noise=add_noise, random_state=random_state
+        )
 
         return {
             'reflectance': reflectance_cube,

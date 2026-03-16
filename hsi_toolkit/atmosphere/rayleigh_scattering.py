@@ -67,20 +67,20 @@ class RayleighScattering:
         # For visible/NIR (λ > 0.55 µm)
         self._tau_coefficients = np.zeros_like(self.wavelengths)
 
-        # UV/blue (λ < 0.5 µm)
+        # UV/blue (λ < 0.5 µm) — Bucholtz (1995) Table 2
         mask_uv = wl_um < 0.5
         if np.any(mask_uv):
             self._tau_coefficients[mask_uv] = (
-                0.00864 * wl_um[mask_uv] ** (-(3.916 + 0.074 * wl_um[mask_uv] +
-                                               0.050 / wl_um[mask_uv]))
+                0.00864 * wl_um[mask_uv] ** (-(3.01577 + 0.38896 * wl_um[mask_uv] +
+                                               0.09426 / wl_um[mask_uv]))
             )
 
-        # Visible/NIR (λ >= 0.5 µm)
+        # Visible/NIR (λ >= 0.5 µm) — Bucholtz (1995) Table 2
         mask_vis = wl_um >= 0.5
         if np.any(mask_vis):
             self._tau_coefficients[mask_vis] = (
-                0.00864 * wl_um[mask_vis] ** (-(3.916 + 0.074 * wl_um[mask_vis] +
-                                                0.050 / wl_um[mask_vis]))
+                0.00864 * wl_um[mask_vis] ** (-(3.55212 + 1.35579 * wl_um[mask_vis] +
+                                                0.11563 / wl_um[mask_vis]))
             )
 
     def optical_depth(self, surface_pressure_mb: float = 1013.25,

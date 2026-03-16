@@ -23,6 +23,7 @@ ENVI_DTYPE_MAP = {
     5: np.float64,
     6: np.complex64,
     9: np.complex128,
+    11: np.uint64,   # Some ENVI implementations use 11 for unsigned int64
     12: np.uint16,
     13: np.uint32,
     14: np.int64,
@@ -63,14 +64,14 @@ class ENVIReader:
     def _find_binary(self) -> Path:
         """Find the binary data file."""
         if self.filepath.suffix == '.hdr':
+            # .hdr file → strip suffix to get binary companion
             binary = self.filepath.with_suffix('')
+            if binary.exists():
+                return binary
         else:
-            binary = self.filepath.with_suffix('')
-        if binary.exists():
-            return binary
-        # Try original path
-        if self.filepath.exists() and self.filepath.suffix != '.hdr':
-            return self.filepath
+            # Non-.hdr file is likely the binary itself
+            if self.filepath.exists():
+                return self.filepath
         raise FileNotFoundError(f"Cannot find binary data for {self.filepath}")
 
     def _parse_header(self) -> Dict[str, Any]:
@@ -155,13 +156,21 @@ class ENVIReader:
             2D array (lines, samples)
         """
         lines, samples, bands = self.shape
+
+        if band_idx < 0 or band_idx >= bands:
+            raise IndexError(
+                f"band_idx {band_idx} out of range for file with {bands} bands"
+            )
+
         itemsize = self.dtype.itemsize
 
         if self.interleave == 'bsq':
             # Band sequential - can read directly
             offset = band_idx * lines * samples * itemsize
-            data = np.fromfile(str(self.binary_path), dtype=self.dtype,
-                             count=lines * samples, offset=offset)
+            data = np.fromfile(
+                str(self.binary_path), dtype=self.dtype,
+                count=lines * samples, offset=offset
+            )
             return data.reshape(lines, samples)
         else:
             # Need to read full file for BIL/BIP
@@ -230,11 +239,11 @@ class ENVIWriter:
             f"samples = {samples}",
             f"lines = {lines}",
             f"bands = {bands}",
-            f"header offset = 0",
-            f"file type = ENVI Standard",
+            "header offset = 0",
+            "file type = ENVI Standard",
             f"data type = {dtype_code}",
             f"interleave = {interleave}",
-            f"byte order = 0",
+            "byte order = 0",
         ]
 
         if wavelengths is not None and len(wavelengths) == bands:

@@ -28,7 +28,7 @@ References:
 """
 
 import numpy as np
-from .utils import get_band, absorption_depth, interpolate_band
+from .utils import get_band, absorption_depth
 
 
 # =============================================================================
@@ -91,8 +91,11 @@ def hydrocarbon_index(
     r_1740 = get_band(rfl, wavelengths, 1740)
     r_1760 = get_band(rfl, wavelengths, 1760)
 
-    eps = 1e-10
-    hi = ((r_1720 + r_1760) / (2 * r_1740 + eps)) - 1.0
+    denom = 2 * r_1740
+    hi = np.divide(
+        r_1720 + r_1760, denom,
+        out=np.ones_like(r_1720, dtype=np.float64), where=denom != 0
+    ) - 1.0
 
     return hi
 
@@ -128,8 +131,9 @@ def oil_index(
     hi = hydrocarbon_index(rfl, wavelengths)
     ad_2310 = hydrocarbon_absorption_depth(rfl, wavelengths, band='2310')
 
-    # Combine indices (both should be positive for oil)
-    oi = np.maximum(hi, 0) * ad_2310
+    # Combine indices — use HI directly (preserving weak positives)
+    # and zero only clearly negative values (noise/non-hydrocarbon)
+    oi = np.where(hi > -0.005, hi, 0.0) * ad_2310
 
     return oi
 
@@ -196,11 +200,20 @@ def methane_ratio(
     Returns:
         Methane ratio (higher = more CH4 absorption)
     """
+    wavelengths = np.asarray(wavelengths)
+
+    # Methane detection requires SWIR coverage to at least 2300nm
+    if wavelengths[-1] < 2250:
+        import warnings
+        warnings.warn(
+            f"methane_ratio: data wavelength range ends at {wavelengths[-1]:.0f}nm, "
+            f"but CH4 detection requires coverage to ~2300nm; results unreliable"
+        )
+
     r_2260 = get_band(rfl, wavelengths, 2260)
     r_2300 = get_band(rfl, wavelengths, 2300)
 
-    eps = 1e-10
-    mr = r_2260 / (r_2300 + eps)
+    mr = np.divide(r_2260, r_2300, out=np.zeros_like(r_2260, dtype=np.float64), where=r_2300 != 0)
 
     return mr
 
@@ -238,8 +251,8 @@ def asphaltic_index(
     r_2200 = get_band(rfl, wavelengths, 2200)
     mean_swir = (r_1600 + r_2200) / 2
 
-    # Dark + hydrocarbon signature
-    ai = np.maximum(hi, 0) * (1 - mean_swir)
+    # Dark + hydrocarbon signature — preserve weak positives
+    ai = np.where(hi > -0.005, hi, 0.0) * (1 - mean_swir)
 
     return ai
 
@@ -313,8 +326,8 @@ def oil_water_ratio(
     ad_1730 = hydrocarbon_absorption_depth(rfl, wavelengths, band='1730')
     r_1450 = get_band(rfl, wavelengths, 1450)
 
-    eps = 1e-10
     # Low R_1450 = water absorption = high water content
-    owr = ad_1730 / (1 - r_1450 + eps)
+    denom = 1 - r_1450
+    owr = np.divide(ad_1730, denom, out=np.zeros_like(ad_1730, dtype=np.float64), where=denom != 0)
 
     return owr

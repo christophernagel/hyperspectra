@@ -28,8 +28,7 @@ References:
 """
 
 import numpy as np
-from typing import Union, Tuple
-from .utils import get_band, continuum_removal, absorption_depth
+from .utils import get_band, absorption_depth
 
 
 # =============================================================================
@@ -98,8 +97,13 @@ def clay_index(
     r_2200 = get_band(rfl, wavelengths, 2200)
     r_2250 = get_band(rfl, wavelengths, 2250)
 
-    eps = 1e-10
-    ci = (r_2120 * r_2250) / (r_2200 ** 2 + eps)
+    denom = r_2200 ** 2
+    # Guard: dark materials (reflectance < 0.05) produce false positives
+    # from small-number division; mask them out. Preserve NaN propagation.
+    bright_enough = r_2200 > 0.05
+    out = np.full_like(r_2120, np.nan, dtype=np.float64)
+    valid = np.isfinite(denom) & (denom != 0) & bright_enough
+    ci = np.divide(r_2120 * r_2250, denom, out=out, where=valid)
 
     return ci
 
@@ -137,8 +141,11 @@ def kaolinite_index(
     r_2165 = get_band(rfl, wavelengths, 2165)
     r_2205 = get_band(rfl, wavelengths, 2205)
 
-    eps = 1e-10
-    ki = (r_2165 / (r_2205 + eps)) * (r_2165 / (r_2120 + eps))
+    _zeros = np.zeros_like(r_2165, dtype=np.float64)
+    ki = (
+        np.divide(r_2165, r_2205, out=_zeros.copy(), where=r_2205 != 0)
+        * np.divide(r_2165, r_2120, out=_zeros.copy(), where=r_2120 != 0)
+    )
 
     return ki
 
@@ -173,9 +180,11 @@ def smectite_index(
     r_2200 = get_band(rfl, wavelengths, 2200)
     r_2290 = get_band(rfl, wavelengths, 2290)
 
-    eps = 1e-10
     continuum = (r_2120 + r_2290) / 2
-    si = r_2200 / (continuum + eps)
+    si = np.divide(
+        r_2200, continuum,
+        out=np.zeros_like(r_2200, dtype=np.float64), where=continuum != 0
+    )
 
     return si
 
@@ -210,8 +219,11 @@ def illite_index(
     r_2195 = get_band(rfl, wavelengths, 2195)
     r_2250 = get_band(rfl, wavelengths, 2250)
 
-    eps = 1e-10
-    ii = (r_2120 + r_2250) / (2 * r_2195 + eps)
+    denom = 2 * r_2195
+    ii = np.divide(
+        r_2120 + r_2250, denom,
+        out=np.zeros_like(r_2120, dtype=np.float64), where=denom != 0
+    )
 
     return ii
 
@@ -247,9 +259,11 @@ def alunite_index(
     r_2170 = get_band(rfl, wavelengths, 2170)
     r_2220 = get_band(rfl, wavelengths, 2220)
 
-    eps = 1e-10
     continuum = (r_2120 + r_2220) / 2
-    ai = r_2170 / (continuum + eps)
+    ai = np.divide(
+        r_2170, continuum,
+        out=np.zeros_like(r_2170, dtype=np.float64), where=continuum != 0
+    )
 
     return ai
 
@@ -287,8 +301,11 @@ def carbonate_index(
     r_2330 = get_band(rfl, wavelengths, 2330)
     r_2380 = get_band(rfl, wavelengths, 2380)
 
-    eps = 1e-10
-    cari = (r_2250 * r_2380) / (r_2330 ** 2 + eps)
+    denom = r_2330 ** 2
+    cari = np.divide(
+        r_2250 * r_2380, denom,
+        out=np.zeros_like(r_2250, dtype=np.float64), where=denom != 0
+    )
 
     return cari
 
@@ -322,9 +339,11 @@ def calcite_index(
     r_2340 = get_band(rfl, wavelengths, 2340)
     r_2390 = get_band(rfl, wavelengths, 2390)
 
-    eps = 1e-10
     continuum = (r_2290 + r_2390) / 2
-    cai = r_2340 / (continuum + eps)
+    cai = np.divide(
+        r_2340, continuum,
+        out=np.zeros_like(r_2340, dtype=np.float64), where=continuum != 0
+    )
 
     return cai
 
@@ -362,9 +381,11 @@ def dolomite_index(
     r_2320 = get_band(rfl, wavelengths, 2320)
     r_2380 = get_band(rfl, wavelengths, 2380)
 
-    eps = 1e-10
     continuum = (r_2260 + r_2380) / 2
-    doi = r_2320 / (continuum + eps)
+    doi = np.divide(
+        r_2320, continuum,
+        out=np.zeros_like(r_2320, dtype=np.float64), where=continuum != 0
+    )
 
     return doi
 
@@ -402,8 +423,7 @@ def ferric_iron_index(
     r_750 = get_band(rfl, wavelengths, 750)
     r_860 = get_band(rfl, wavelengths, 860)
 
-    eps = 1e-10
-    fe3i = r_750 / (r_860 + eps)
+    fe3i = np.divide(r_750, r_860, out=np.zeros_like(r_750, dtype=np.float64), where=r_860 != 0)
 
     return fe3i
 
@@ -436,8 +456,7 @@ def ferrous_iron_index(
     r_860 = get_band(rfl, wavelengths, 860)
     r_1000 = get_band(rfl, wavelengths, 1000)
 
-    eps = 1e-10
-    fe2i = r_860 / (r_1000 + eps)
+    fe2i = np.divide(r_860, r_1000, out=np.zeros_like(r_860, dtype=np.float64), where=r_1000 != 0)
 
     return fe2i
 

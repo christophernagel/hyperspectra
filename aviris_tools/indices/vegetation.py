@@ -174,8 +174,14 @@ def evi(
     nir = get_band(rfl, wavelengths, 860)
     blue = get_band(rfl, wavelengths, 480)
 
-    eps = 1e-10
-    evi_val = G * (nir - red) / (nir + C1 * red - C2 * blue + L + eps)
+    denom = nir + C1 * red - C2 * blue + L
+    # Guard: denominator can go negative with high blue reflectance;
+    # only compute where denominator is positive and non-trivial
+    valid = denom > 0.01
+    evi_val = np.divide(
+        G * (nir - red), denom,
+        out=np.zeros_like(nir, dtype=np.float64), where=valid
+    )
 
     return evi_val
 
@@ -210,8 +216,11 @@ def savi(
     red = get_band(rfl, wavelengths, 650)
     nir = get_band(rfl, wavelengths, 860)
 
-    eps = 1e-10
-    savi_val = (nir - red) * (1 + L) / (nir + red + L + eps)
+    denom = nir + red + L
+    savi_val = np.divide(
+        (nir - red) * (1 + L), denom,
+        out=np.zeros_like(nir, dtype=np.float64), where=denom != 0
+    )
 
     return savi_val
 
@@ -247,8 +256,7 @@ def pssr(
     r_680 = get_band(rfl, wavelengths, 680)
     r_800 = get_band(rfl, wavelengths, 800)
 
-    eps = 1e-10
-    return r_800 / (r_680 + eps)
+    return np.divide(r_800, r_680, out=np.zeros_like(r_800, dtype=np.float64), where=r_680 != 0)
 
 
 def mcari(
@@ -278,8 +286,8 @@ def mcari(
     r_670 = get_band(rfl, wavelengths, 670)
     r_700 = get_band(rfl, wavelengths, 700)
 
-    eps = 1e-10
-    mcari_val = ((r_700 - r_670) - 0.2 * (r_700 - r_550)) * (r_700 / (r_670 + eps))
+    ratio = np.divide(r_700, r_670, out=np.zeros_like(r_700, dtype=np.float64), where=r_670 != 0)
+    mcari_val = ((r_700 - r_670) - 0.2 * (r_700 - r_550)) * ratio
 
     return mcari_val
 
@@ -311,8 +319,8 @@ def tcari(
     r_670 = get_band(rfl, wavelengths, 670)
     r_700 = get_band(rfl, wavelengths, 700)
 
-    eps = 1e-10
-    tcari_val = 3 * ((r_700 - r_670) - 0.2 * (r_700 - r_550) * (r_700 / (r_670 + eps)))
+    ratio = np.divide(r_700, r_670, out=np.zeros_like(r_700, dtype=np.float64), where=r_670 != 0)
+    tcari_val = 3 * ((r_700 - r_670) - 0.2 * (r_700 - r_550) * ratio)
 
     return tcari_val
 
@@ -333,6 +341,9 @@ def osavi(
         Rondeaux, G., Steven, M., & Baret, F. (1996). Optimization of soil-
         adjusted vegetation indices. RSE, 55(2), 95-107.
 
+    Note:
+        Uses 670/800nm per Rondeaux (1996), not NDVI's 650/860nm (Rouse 1974).
+
     Parameters:
         rfl: Reflectance array
         wavelengths: Wavelength array in nm
@@ -343,8 +354,11 @@ def osavi(
     red = get_band(rfl, wavelengths, 670)
     nir = get_band(rfl, wavelengths, 800)
 
-    eps = 1e-10
-    osavi_val = (nir - red) / (nir + red + 0.16 + eps)
+    denom = nir + red + 0.16
+    osavi_val = np.divide(
+        nir - red, denom,
+        out=np.zeros_like(nir, dtype=np.float64), where=denom != 0
+    )
 
     return osavi_val
 
@@ -381,7 +395,15 @@ def red_edge_position(
 
     # Linear interpolation for inflection point
     # REP = 700 + 40 × [(R670 + R780)/2 - R700] / (R740 - R700)
-    eps = 1e-10
-    rep = 700 + 40 * (((r_670 + r_780) / 2 - r_700) / (r_740 - r_700 + eps))
+    denom = r_740 - r_700
+    # Guard: when r_740 ≈ r_700 (flat spectrum), result is meaningless;
+    # require minimum denominator to avoid wild extrapolation
+    valid = np.abs(denom) > 1e-4
+    frac = np.divide((r_670 + r_780) / 2 - r_700, denom,
+                     out=np.zeros_like(r_670, dtype=np.float64), where=valid)
+    rep = 700 + 40 * frac
+
+    # Clamp to physical red-edge range
+    rep = np.clip(rep, 670, 780)
 
     return rep
