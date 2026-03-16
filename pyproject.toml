@@ -51,6 +51,14 @@ dashboard = [
     "dash>=2.0",
     "plotly>=5.0",
 ]
+web = [
+    "trame>=3.0",
+    "trame-vuetify>=2.0",
+    "trame-plotly>=1.0",
+    "plotly>=5.0",
+    "vtk>=9.4",
+    "trame-vtk>=2.8",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=3.0",
@@ -58,12 +66,13 @@ dev = [
     "flake8",
 ]
 all = [
-    "hyperspectra[viewer,py6s,dashboard,dev]",
+    "hyperspectra[viewer,py6s,dashboard,web,dev]",
 ]
 
 [project.scripts]
 aviris-process = "aviris_tools.cli:process_cli"
 aviris-view = "aviris_tools.cli:view_cli"
+aviris-web = "aviris_tools.web:main"
 
 [project.urls]
 Homepage = "https://github.com/christophernagel/hyperspectra"
@@ -78,6 +87,8 @@ packages = [
     "aviris_tools.indices",
     "aviris_tools.utils",
     "aviris_tools.atm_correction",
+    "aviris_tools.web",
+    "aviris_tools.web.ui",
     "aviris_tools.tests",
     "aviris_tools.scripts",
     "hsi_toolkit",
@@ -95,6 +106,23 @@ aviris_tools = ["reference_spectra/*.json"]
 testpaths = ["aviris_tools/tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["aviris_tools", "hsi_toolkit"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+    "legacy_scripts/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]
 
 [tool.black]
 line-length = 100
