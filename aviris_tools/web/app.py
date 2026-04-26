@@ -2,18 +2,22 @@
 Main trame application for the hyperspectral web viewer.
 """
 
+import asyncio
 import logging
 import re
 import threading
 
+import numpy as np
 import plotly.graph_objects as go
 from trame.app import get_server
 from trame.ui.vuetify3 import SinglePageWithDrawerLayout
 from trame.widgets import vuetify3 as v3, plotly as trame_plotly
 
+from .camera_engine import CameraEngine, CameraNotConnectedError
 from .engine import WebEngine
 from .layers import LayerManager
 from .rois import ROIManager
+from .ui.camera import build_camera_panel
 from .ui.processing import build_processing_panel
 from .ui.view_3d import build_3d_controls
 from .figures import (
@@ -55,6 +59,7 @@ class HyperspectralWebApp:
         self.state = self.server.state
         self.ctrl = self.server.controller
         self.engine = WebEngine()
+        self.camera_engine = CameraEngine()
         self.data_dir = data_dir
 
         self._pixel_spectra = []
@@ -63,6 +68,17 @@ class HyperspectralWebApp:
         self._3d_plotly_widget = None
         self._vtk_view_widget = None
         self._vtk_viewer = None
+        self._camera_preview_widget = None
+
+        # Inbox written by the camera worker thread, drained by an asyncio
+        # tick on the trame loop. trame state mutation requires the loop, so
+        # the worker can't push directly.
+        self._camera_inbox_lock = threading.Lock()
+        self._camera_inbox_frame = None
+        self._camera_inbox_meta = None
+        self._camera_inbox_status = None
+        self._camera_inbox_error = None
+        self._camera_tick_task = None
 
         self._init_state()
 
@@ -139,6 +155,40 @@ class HyperspectralWebApp:
         self.state.cube_3d_loaded = False
         self.state.cube_3d_loading = False
 
+        # Camera
+        self.state.camera_connected = False
+        self.state.camera_previewing = False
+        self.state.camera_error = ""
+        self.state.camera_status_label = "Disconnected"
+        self.state.camera_status_color = "default"
+        self.state.camera_status_icon = "mdi-power-plug-off"
+        self.state.camera_device_model = ""
+        self.state.camera_device_serial = ""
+        self.state.camera_exposure_us = 10000
+        self.state.camera_exposure_min = 1
+        self.state.camera_exposure_max = 1000000
+        self.state.camera_exposure_inc = 1
+        self.state.camera_gain_db = 0.0
+        self.state.camera_gain_min = 0.0
+        self.state.camera_gain_max = 24.0
+        self.state.camera_gain_inc = 0.1
+        self.state.camera_roi_width = 2464
+        self.state.camera_roi_height = 2056
+        self.state.camera_roi_offsetX = 0
+        self.state.camera_roi_offsetY = 0
+        self.state.camera_format = "XI_MONO8"
+        self.state.camera_bit_depth = "XI_BPP_8"
+        self.state.camera_board_temp = None
+        self.state.camera_board_temp_label = "—"
+        self.state.camera_bandwidth_mbps = 0
+        self.state.camera_bandwidth_label = "—"
+        self.state.camera_last_nframe = 0
+        self.state.camera_fps = 0.0
+        self.state.camera_save_dir = "/data/captures"
+        self.state.camera_save_prefix = "cap"
+        self.state.camera_burst_count = 5
+        self.state.camera_save_log = ""
+
         # L1 Processing
         self.state.l1_file_list = WebEngine.scan_directory(self.data_dir)
         self.state.l1_radiance_file = None
@@ -197,6 +247,19 @@ class HyperspectralWebApp:
         self.state.change("slice_z_show")(self._on_3d_slice_changed)
         self.state.change("colormap_3d")(self._on_3d_slice_changed)
         self.state.change("opacity_3d")(self._on_3d_slice_changed)
+
+        # Camera
+        self.ctrl.camera_connect = self._camera_connect
+        self.ctrl.camera_disconnect = self._camera_disconnect
+        self.ctrl.camera_start_preview = self._camera_start_preview
+        self.ctrl.camera_stop_preview = self._camera_stop_preview
+        self.ctrl.camera_apply_roi = self._camera_apply_roi
+        self.ctrl.camera_reset_roi = self._camera_reset_roi
+        self.ctrl.camera_apply_format = self._camera_apply_format
+        self.ctrl.camera_snap_one = self._camera_snap_one
+        self.ctrl.camera_snap_n = self._camera_snap_n
+        self.state.change("camera_exposure_us")(self._on_camera_exposure_changed)
+        self.state.change("camera_gain_db")(self._on_camera_gain_changed)
 
     # ----- File / wavelength / index callbacks -----
 
@@ -775,6 +838,7 @@ class HyperspectralWebApp:
                     v3.VTab(value="3d", text="3D", prepend_icon="mdi-cube-outline")
                     v3.VTab(value="layers", text="Layers", prepend_icon="mdi-layers")
                     v3.VTab(value="process", text="Process", prepend_icon="mdi-cog")
+                    v3.VTab(value="camera", text="Camera", prepend_icon="mdi-camera")
 
                 v3.VDivider()
 
@@ -799,6 +863,12 @@ class HyperspectralWebApp:
                         with v3.VContainer(fluid=True, classes="pa-2"):
                             build_processing_panel(
                                 self.state, self.ctrl, self.data_dir
+                            )
+
+                    with v3.VWindowItem(value="camera"):
+                        with v3.VContainer(fluid=True, classes="pa-2"):
+                            self._camera_preview_widget = build_camera_panel(
+                                self.state, self.ctrl
                             )
 
             # --- Main content ---
@@ -1225,6 +1295,340 @@ class HyperspectralWebApp:
                                     ),
                                     prepend_icon="mdi-opacity",
                                 )
+
+    # =================================================================
+    # Camera
+    # =================================================================
+
+    def _camera_connect(self):
+        try:
+            snapshot = self.camera_engine.connect()
+        except Exception as exc:
+            logger.exception("camera connect failed")
+            self.state.camera_error = str(exc)
+            self._set_camera_status(connected=False)
+            return
+        self.state.camera_error = ""
+        self._apply_capabilities_to_state(snapshot)
+        self._set_camera_status(connected=True)
+
+    def _camera_disconnect(self):
+        try:
+            self.camera_engine.disconnect()
+        except Exception as exc:
+            logger.exception("camera disconnect failed")
+            self.state.camera_error = str(exc)
+        self._set_camera_status(connected=False)
+        self.state.camera_previewing = False
+        self.state.camera_fps = 0.0
+        self._reset_camera_preview_widget("Disconnected")
+
+    def _camera_start_preview(self):
+        if not self.camera_engine.is_connected:
+            return
+        try:
+            self.camera_engine.start_preview(
+                on_frame=self._on_camera_frame,
+                on_status=self._on_camera_status,
+                on_error=self._on_camera_error,
+                target_fps=8.0,
+            )
+        except Exception as exc:
+            logger.exception("camera start_preview failed")
+            self.state.camera_error = str(exc)
+            return
+        self.state.camera_previewing = True
+        self.state.camera_error = ""
+
+        # Start the asyncio drain. Click handlers run on the trame loop, so
+        # asyncio.get_running_loop() is safe here.
+        if self._camera_tick_task is None or self._camera_tick_task.done():
+            try:
+                loop = asyncio.get_running_loop()
+                self._camera_tick_task = loop.create_task(self._camera_tick())
+            except RuntimeError:
+                logger.exception("no running loop in _camera_start_preview")
+
+    def _camera_stop_preview(self):
+        try:
+            self.camera_engine.stop_preview()
+        except Exception:
+            logger.exception("camera stop_preview failed")
+        if self._camera_tick_task is not None and not self._camera_tick_task.done():
+            self._camera_tick_task.cancel()
+        self._camera_tick_task = None
+        self.state.camera_previewing = False
+        self.state.camera_fps = 0.0
+        with self._camera_inbox_lock:
+            self._camera_inbox_frame = None
+            self._camera_inbox_meta = None
+            self._camera_inbox_status = None
+            self._camera_inbox_error = None
+
+    def _camera_apply_roi(self):
+        try:
+            actual = self.camera_engine.set_roi(
+                int(self.state.camera_roi_width),
+                int(self.state.camera_roi_height),
+                int(self.state.camera_roi_offsetX),
+                int(self.state.camera_roi_offsetY),
+            )
+        except Exception as exc:
+            logger.exception("camera set_roi failed")
+            self.state.camera_error = str(exc)
+            return
+        self.state.camera_error = ""
+        self.state.camera_roi_width = actual["width"]
+        self.state.camera_roi_height = actual["height"]
+        self.state.camera_roi_offsetX = actual["offsetX"]
+        self.state.camera_roi_offsetY = actual["offsetY"]
+        self._camera_log(
+            f"ROI applied: {actual['width']}x{actual['height']} "
+            f"@ ({actual['offsetX']},{actual['offsetY']})"
+        )
+
+    def _camera_reset_roi(self):
+        caps = self.camera_engine._capabilities
+        self.state.camera_roi_width = caps.get("width", {}).get("max", 2464)
+        self.state.camera_roi_height = caps.get("height", {}).get("max", 2056)
+        self.state.camera_roi_offsetX = 0
+        self.state.camera_roi_offsetY = 0
+        self._camera_apply_roi()
+
+    def _camera_apply_format(self):
+        try:
+            actual = self.camera_engine.set_format(
+                self.state.camera_format,
+                self.state.camera_bit_depth,
+            )
+        except Exception as exc:
+            logger.exception("camera set_format failed")
+            self.state.camera_error = str(exc)
+            return
+        self.state.camera_error = ""
+        self.state.camera_bit_depth = actual["bit_depth"] or "XI_BPP_8"
+        self._camera_log(
+            f"Format: {actual['format']} @ {actual['bit_depth']}"
+        )
+
+    def _on_camera_exposure_changed(self, camera_exposure_us, **_):
+        if not self.camera_engine.is_connected or camera_exposure_us is None:
+            return
+        try:
+            actual = self.camera_engine.set_exposure_us(int(camera_exposure_us))
+        except Exception as exc:
+            logger.exception("set_exposure failed")
+            self.state.camera_error = str(exc)
+            return
+        if int(actual) != int(camera_exposure_us):
+            self.state.camera_exposure_us = int(actual)
+
+    def _on_camera_gain_changed(self, camera_gain_db, **_):
+        if not self.camera_engine.is_connected or camera_gain_db is None:
+            return
+        try:
+            actual = self.camera_engine.set_gain_db(float(camera_gain_db))
+        except Exception as exc:
+            logger.exception("set_gain failed")
+            self.state.camera_error = str(exc)
+            return
+        if abs(float(actual) - float(camera_gain_db)) > 1e-6:
+            self.state.camera_gain_db = float(actual)
+
+    def _camera_snap_one(self):
+        self._snap_and_save(1)
+
+    def _camera_snap_n(self):
+        try:
+            n = max(1, int(self.state.camera_burst_count))
+        except (TypeError, ValueError):
+            n = 1
+        self._snap_and_save(n)
+
+    def _snap_and_save(self, count: int):
+        def _run():
+            saved = 0
+            errors = 0
+            for i in range(count):
+                try:
+                    arr = self.camera_engine.grab_one()
+                    tif, _ = self.camera_engine.save_frame(
+                        arr,
+                        self.state.camera_save_dir or "/data/captures",
+                        self.state.camera_save_prefix or "cap",
+                    )
+                    saved += 1
+                    with self.server.state as s:
+                        s.camera_save_log = (
+                            f"saved {tif.name}\n" + (s.camera_save_log or "")
+                        )[:2000]
+                except Exception as exc:
+                    errors += 1
+                    logger.exception("snap failed")
+                    with self.server.state as s:
+                        s.camera_save_log = (
+                            f"ERROR: {exc}\n" + (s.camera_save_log or "")
+                        )[:2000]
+            with self.server.state as s:
+                s.camera_save_log = (
+                    f"--- snap done: {saved}/{count} ok, {errors} errors ---\n"
+                    + (s.camera_save_log or "")
+                )[:2000]
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    # ----- worker callbacks (run in CameraWorker thread) -----
+    # Trame state ops require the asyncio loop, so the worker must NOT touch
+    # state directly. It just drops the latest values into the inbox; the
+    # async tick below drains them on the loop.
+
+    def _on_camera_frame(self, arr: np.ndarray, meta: dict):
+        with self._camera_inbox_lock:
+            self._camera_inbox_frame = arr
+            self._camera_inbox_meta = meta
+
+    def _on_camera_status(self, status: dict):
+        with self._camera_inbox_lock:
+            self._camera_inbox_status = status
+
+    def _on_camera_error(self, msg: str):
+        with self._camera_inbox_lock:
+            self._camera_inbox_error = msg
+
+    async def _camera_tick(self):
+        try:
+            while True:
+                await asyncio.sleep(0.1)
+                self._drain_camera_inbox()
+                if not self.camera_engine.is_previewing:
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("camera tick crashed")
+
+    def _drain_camera_inbox(self):
+        with self._camera_inbox_lock:
+            frame = self._camera_inbox_frame
+            meta = self._camera_inbox_meta
+            status = self._camera_inbox_status
+            error = self._camera_inbox_error
+            self._camera_inbox_frame = None
+            self._camera_inbox_meta = None
+            self._camera_inbox_status = None
+            self._camera_inbox_error = None
+
+        if error is not None:
+            with self.server.state as state:
+                state.camera_error = error
+                state.camera_previewing = False
+                state.camera_fps = 0.0
+
+        if status is not None:
+            with self.server.state as state:
+                temp = status.get("board_temp_c")
+                bw = status.get("bandwidth_mbps")
+                state.camera_board_temp = temp
+                state.camera_board_temp_label = (
+                    f"{temp:.1f} °C" if temp is not None else "—"
+                )
+                if bw is not None:
+                    state.camera_bandwidth_mbps = bw
+                    state.camera_bandwidth_label = f"{bw} MB/s"
+                if "fps" in status:
+                    state.camera_fps = status["fps"]
+
+        if frame is not None:
+            fig = self._build_camera_preview_fig(frame)
+            with self.server.state as state:
+                state.camera_last_nframe = (meta or {}).get("nframe", 0)
+                if meta and "fps" in meta:
+                    state.camera_fps = meta["fps"]
+            if self._camera_preview_widget is not None:
+                self._camera_preview_widget.update(fig)
+
+    # ----- helpers -----
+
+    def _apply_capabilities_to_state(self, snapshot: dict):
+        dev = snapshot.get("device", {})
+        caps = snapshot.get("capabilities", {})
+        self.state.camera_device_model = dev.get("model", "")
+        self.state.camera_device_serial = dev.get("serial", "")
+
+        exp = caps.get("exposure", {})
+        self.state.camera_exposure_min = int(exp.get("min", 1))
+        self.state.camera_exposure_max = int(exp.get("max", 1_000_000))
+        self.state.camera_exposure_inc = max(1, int(exp.get("inc", 1)))
+        self.state.camera_exposure_us = int(exp.get("value", 10_000))
+
+        gain = caps.get("gain", {})
+        self.state.camera_gain_min = float(gain.get("min", 0.0))
+        self.state.camera_gain_max = float(gain.get("max", 24.0))
+        self.state.camera_gain_inc = float(gain.get("inc", 0.1)) or 0.1
+        self.state.camera_gain_db = float(gain.get("value", 0.0))
+
+        self.state.camera_roi_width = int(caps.get("width", {}).get("value", 2464))
+        self.state.camera_roi_height = int(caps.get("height", {}).get("value", 2056))
+        self.state.camera_roi_offsetX = int(caps.get("offsetX", {}).get("value", 0))
+        self.state.camera_roi_offsetY = int(caps.get("offsetY", {}).get("value", 0))
+
+        self.state.camera_format = caps.get("format", "XI_MONO8") or "XI_MONO8"
+        self.state.camera_bit_depth = (
+            caps.get("bit_depth", {}).get("value") or "XI_BPP_8"
+        )
+
+    def _set_camera_status(self, connected: bool):
+        self.state.camera_connected = connected
+        if connected:
+            self.state.camera_status_label = "Connected"
+            self.state.camera_status_color = "success"
+            self.state.camera_status_icon = "mdi-power-plug"
+        else:
+            self.state.camera_status_label = "Disconnected"
+            self.state.camera_status_color = "default"
+            self.state.camera_status_icon = "mdi-power-plug-off"
+            self.state.camera_device_model = ""
+            self.state.camera_device_serial = ""
+
+    def _camera_log(self, line: str):
+        prev = self.state.camera_save_log or ""
+        self.state.camera_save_log = (line + "\n" + prev)[:2000]
+
+    def _reset_camera_preview_widget(self, message: str):
+        if self._camera_preview_widget is None:
+            return
+        self._camera_preview_widget.update(make_empty_figure(message))
+
+    def _build_camera_preview_fig(self, arr: np.ndarray):
+        # Auto-stretch to observed range. Without this, low-signal frames
+        # (short exposure, dim scene) render as a flat black square against
+        # a fixed full-range scale.
+        if arr.size:
+            obs_min = int(arr.min())
+            obs_max = int(arr.max())
+        else:
+            obs_min, obs_max = 0, 1
+        if obs_max <= obs_min:
+            obs_max = obs_min + 1
+        fig = go.Figure(
+            data=[go.Heatmap(
+                z=arr,
+                colorscale="gray",
+                showscale=False,
+                zmin=obs_min,
+                zmax=obs_max,
+                hoverinfo="skip",
+            )]
+        )
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False, scaleanchor="x", autorange="reversed"),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            height=280,
+        )
+        return fig
 
 
 class _StateLogHandler(logging.Handler):
